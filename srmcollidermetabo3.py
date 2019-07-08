@@ -52,8 +52,6 @@ output: Filtered compound list
 """
 def filter2(compounds_filt):
     subtract = [] #ones that have chiral isomers that need to be removed #6378
-    lists = [] #list of chiral isomers per each compound
-    matches = []
     
     for index, row in compounds_filt.iterrows():
         sample_set = compounds_filt.loc[compounds_filt['formula'] == row['formula']] # specific isomers of the compound being looked at
@@ -61,37 +59,26 @@ def filter2(compounds_filt):
         inchi = row['inchi']
         matches = []
         if len(sample_set)>1: #there are isomers
-            if '/b' in inchi:
-                connectivity = ((re.search(('InChI(.*)/b'), inchi)).group(1))
-            elif '/t' in inchi:
-                connectivity = ((re.search(('InChI(.*)/t'), inchi)).group(1))
-            elif '/f' in inchi:
-                connectivity = ((re.search(('InChI(.*)/f'), inchi)).group(1))
-            elif '/s' in inchi:
-                connectivity = ((re.search(('InChI(.*)/s'), inchi)).group(1))
+            if '/m' in inchi:
+                connectivity = ((re.search(('InChI(.*)/m'), inchi)).group(1))
             else:
-                connectivity = inchi
+                connectivity = ""
                                             
-            for i2, isomer in sample_set.iterrows(): #check if structural connectivity is the same, if so, a chiral isomer so can be removed
+            for i2, isomer in sample_set.iterrows(): #check if stereo connectivity is the same, if so, a chiral isomer so can be removed
                 other = isomer['inchi']
-                if '/b' in other:
-                    check = ((re.search(('InChI(.*)/b'), other)).group(1))
-                elif '/t' in other:
-                     check = ((re.search(('InChI(.*)/t'), other)).group(1))
-                elif '/f' in other:
-                    check = ((re.search(('InChI(.*)/f'), other)).group(1))
-                elif '/s' in other:
-                    check = ((re.search(('InChI(.*)/s'), other)).group(1))
+                if '/m' in other:
+                    check = ((re.search(('InChI(.*)/m'), other)).group(1))
                 else:
                     check = other
                               
-                if (check == connectivity) and (i2 not in subtract): 
+                if (check == connectivity) and (i2 not in subtract):
                     subtract.append(i2)
                     matches.append(other)
 
     for x in subtract:
         compounds_filt = compounds_filt.drop(x)
     return compounds_filt
+
 
 """
 function choose_background_and_query:
@@ -106,9 +93,8 @@ Input: mol_id, Q1 parameters (change, ppm - if ppm is filled, that will take pri
 Output: query (row), background_filt (background for query prec_mz), transitions_q1 (background for frag_mz),
         query_frag_mz_value (value of transition frag_mz), query_frag_mz (query fragment m/z with intensity)
 """
-#input ppm, or else change of 0.7 is the default 
-def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, col_energy = 35, col_gas = '',
-                      ion_mode = '',inst_type = 'HCD', adduct = ['[M+H]+', '[M+Na]+'], q3 = True, top_n = 0.1, plot_back = False):
+def choose_background_and_query_UIS2(spectra_filt, mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, col_energy = 35, col_gas = '',
+                      ion_mode = 'P',inst_type = '', adduct = ['[M+H]+', '[M+Na]+'], q3 = True, top_n = 0.1, plot_back = False):
 
     #choosing a query 
     query_opt = spectra_filt.loc[(spectra_filt['mol_id'] == mol_id)]
@@ -127,15 +113,17 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
         low = int(col_energy)-5
         high = int(col_energy)+5
         query_opt = query_opt.loc[pd.to_numeric(query_opt['col_energy']).between(low, high, inclusive = True)]
+        background_filt['col_energy'].replace(regex=True,inplace=True,to_replace='[^0-9]',value=r'')
+        background_filt = background_filt.loc[pd.to_numeric(background_filt['col_energy']).between(low, high, inclusive = True)] #collision energy filter 
     if col_gas != '':
         query_opt = query_opt.loc[query_opt['col_gas'] == str(col_gas)]
+        background_filt = background_filt.loc[background_filt['col_gas'] == str(col_gas)]
     if ion_mode != '':
         query_opt = query_opt.loc[query_opt['ion_mode'] == str(ion_mode)]
+        background_filt = background_filt.loc[background_filt['ion_mode'] == str(ion_mode)]
     if inst_type != '':
-        query_opt = query_opt.loc[query_opt['inst_type'] == str(inst_type)] 
-
-    background_filt['col_energy'].replace(regex=True,inplace=True,to_replace='[^0-9]',value=r'')
-    background_filt = background_filt.loc[pd.to_numeric(background_filt['col_energy']).between(low, high, inclusive = True)] #collision energy filter 
+        query_opt = query_opt.loc[query_opt['inst_type'] == str(inst_type)]
+        background_filt = background_filt.loc[background_filt['inst_type'] == str(inst_type)]
     
     #print(query_opt)
     if len(query_opt)>1:
@@ -149,40 +137,112 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
 
         #choosing background
         if ppm != 0:
-            change = query_prec_mz*(ppm/1000000)
-        low = query_prec_mz - change
-        high = query_prec_mz + change
+            change = ppm/1000000
+       
+        low = query_prec_mz - change/2
+        high = query_prec_mz + change/2
         background_filt = background_filt.loc[background_filt['prec_mz'].between(low, high, inclusive = False)]
-        
+
         #choosing the fragment
         query_frag_mz =  list(query['peaks'])[0]
-        query_frag_mz.sort(key = lambda x: x[0], reverse = True)
-        query_frag_mz = query_frag_mz[0]
-        query_frag_mz_value = float(query_frag_mz[1])
-
+        query_frag_mz.sort(key = lambda x: x[1], reverse = True)
+        query_frag_mz = query_frag_mz[0:2]
+        query_frag_mz_values = [query[0] for query in query_frag_mz]
+        
         if q3 == True:
-            if ppm_q3 != 0:
-                change_q3 = query_frag_mz_value*(ppm_q3/1000000)
-            low = query_frag_mz_value - change_q3
-            high = query_frag_mz_value + change_q3
-
-            transitions_q1 = [[(a,b) for (a,b) in x if b>low and b<high] for x in background_filt['peaks']]
+            for transition in query_frag_mz_values:
+                if ppm_q3 != 0:
+                    change_q3 = ppm_q3/1000000.0
+                low = transition - change_q3/2.0
+                high = transition + change_q3/2.0
+                transitions_q1 = [[(a,b) for (a,b) in peaklist if a>low and a<high and (b>(1000*top_n))] for peaklist in background_filt['peaks']] #do transitions here
+    
             transitions_q1 = [x for x in transitions_q1 if x!= []]
             transitions_q1 = list(itertools.chain.from_iterable(transitions_q1))
-            transitions_q1.sort(key = lambda x: x[0], reverse = True)
+            transitions_q1.sort(key = lambda x: x[1], reverse = True)
+            background_filt = background_filt.loc[(background_filt['peaks'].apply(lambda x: any(transition in x for transition in transitions_q1)))]
+    else:
+        query_frag_mz = 0
+        query_frag_mz_values = 0
+        #background_filt = list(background_filt['prec_mz'])
 
-            if len(transitions_q1)!=0: #there are interferences with chosen transition (Q3)
-                background_filt = background_filt.loc[(background_filt['peaks'].apply(lambda x: any(transition in x for transition in transitions_q1)))]
+    if plot_back == True:
+        ax = sns.distplot(list(background_filt['prec_mz']),bins = 20,kde = False)
+        ax.grid()
+        plt.show()
 
-                #getting top 10% of the fragment ions 
-                if (top_n != 0) & (len(transitions_q1) != 0):
-                    greatest = transitions_q1[0][0]
-                    transitions_q1 = [(a,b) for (a,b) in transitions_q1 if float(a/greatest) > top_n]
+    return query, background_filt, query_frag_mz_values, query_frag_mz  
+
+#input ppm, or else change of 0.7 is the default 
+def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, col_energy = 35, col_gas = '',
+                      ion_mode = 'P',inst_type = '', adduct = ['[M+H]+', '[M+Na]+'], q3 = True, top_n = 0.1, plot_back = False):
+
+    #choosing a query 
+    query_opt = spectra_filt.loc[(spectra_filt['mol_id'] == mol_id)]
+    if adduct != []:
+        adduct = [str(x) for x in adduct]
+        query_opt = query_opt.loc[query_opt['prec_type'].isin(adduct)]
+
+    #drop all the same adduct from this list of spectra 
+    background_filt = spectra_filt.drop(query_opt.index) #drop spectra from same mol_id
+
+    #analyte chosen is MS2 (keep MS3 and MS4 in background) 
+    query_opt = query_opt.loc[query_opt['spec_type'] == 'MS2']
+    
+    if col_energy != 0:
+        query_opt['col_energy'].replace(regex=True,inplace=True,to_replace='[^0-9]',value=r'')
+        low = int(col_energy)-5
+        high = int(col_energy)+5
+        query_opt = query_opt.loc[pd.to_numeric(query_opt['col_energy']).between(low, high, inclusive = True)]
+        background_filt['col_energy'].replace(regex=True,inplace=True,to_replace='[^0-9]',value=r'')
+        background_filt = background_filt.loc[pd.to_numeric(background_filt['col_energy']).between(low, high, inclusive = True)] #collision energy filter 
+    if col_gas != '':
+        query_opt = query_opt.loc[query_opt['col_gas'] == str(col_gas)]
+        background_filt = background_filt.loc[background_filt['col_gas'] == str(col_gas)]
+    if ion_mode != '':
+        query_opt = query_opt.loc[query_opt['ion_mode'] == str(ion_mode)]
+        background_filt = background_filt.loc[background_filt['ion_mode'] == str(ion_mode)]
+    if inst_type != '':
+        query_opt = query_opt.loc[query_opt['inst_type'] == str(inst_type)]
+        background_filt = background_filt.loc[background_filt['inst_type'] == str(inst_type)]
+    
+    if len(query_opt)>1:
+        query = query_opt.sample(random_state = 9001)
+    else:
+        query = query_opt
+    
+    if len(query) != 0:
+        #choosing a transition (highest intensity for that query)
+        query_prec_mz = float(query['prec_mz'].item())
+
+        #choosing background
+        if ppm != 0:
+            change = ppm/1000000
+       
+        low = query_prec_mz - change/2
+        high = query_prec_mz + change/2
+        background_filt = background_filt.loc[background_filt['prec_mz'].between(low, high, inclusive = False)]
+              
+        #choosing the fragment
+        query_frag_mz =  list(query['peaks'])[0]
+        query_frag_mz.sort(key = lambda x: x[1], reverse = True)
+        query_frag_mz = query_frag_mz[0]
+        query_frag_mz_value = query_frag_mz[0]
+        
+        if q3 == True:
+            if ppm_q3 != 0:
+                change_q3 = ppm_q3/1000000.0
+            low = query_frag_mz_value - change_q3/2.0
+            high = query_frag_mz_value + change_q3/2.0
+            
+            transitions_q1 = [[(a,b) for (a,b) in peaklist if a>low and a<high and (b>(1000*top_n))] for peaklist in background_filt['peaks']] #do transitions here 
+            transitions_q1 = [x for x in transitions_q1 if x!= []]
+            transitions_q1 = list(itertools.chain.from_iterable(transitions_q1))
+            transitions_q1.sort(key = lambda x: x[1], reverse = True)
+            background_filt = background_filt.loc[(background_filt['peaks'].apply(lambda x: any(transition in x for transition in transitions_q1)))]
     else:
         query_frag_mz = 0
         query_frag_mz_value = 0
-        #background_filt = list(background_filt['prec_mz'])
-
     if plot_back == True:
         ax = sns.distplot(list(background_filt['prec_mz']),bins = 20,kde = False)
         ax.grid()
@@ -222,10 +282,10 @@ def profile(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, pp
         else:
             USI1.append(-1) #if no query was found
             Interferences.append(-1)
-            
+    Interferences = Interferences.drop_duplicates(['mol_id'])
     copy['USI1'] = USI1
     copy['Interferences'] = Interferences
-    return copy
+    return copy, Interferences
 
 """
 function profile_specific:
@@ -233,12 +293,25 @@ Based on the given parameters calculates the number of USI and Interferences for
 Input: parameters for choose_background_and_query, a specific mol_id (mol_id), plot_back = True (will plot interferences if present as range of their prec_mz)
 Output: compounds list with added columns of 'USI1' and 'Average Interference', count plot (interferences for a specific mol_id, based on range of prec_mz) 
 """
-def profile_specific(compounds_filt, mol_id, spectra_filt, change = 0.7, ppm = 0, change_q3 = 0.7, ppm_q3 = 0, col_energy = 35, col_gas = '',
-                     ion_mode = '',inst_type = 'HCD', adduct = ['[M+H]+', '[M+Na]+'], q3 = True, top_n = 0.1):
-    profiled = profile(compounds_filt = compounds_filt, spectra_filt = spectra_filt, change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3,
-                       col_energy = col_energy, col_gas = col_gas, ion_mode = ion_mode, inst_type = inst_type, adduct = adduct, q3 = q3, top_n = top_n, plot_back = True)
-    
-    return profiled
+def profile_specific(compounds_filt, spectra_filt, mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, col_energy = 35, col_gas = '',
+                     ion_mode = 'P',inst_type = 'HCD', adduct = ['[M+H]+', '[M+Na]+', '[M-H]-', '[M+H-H20]+'], q3 = True, top_n = 0.1):
+
+    query, background, frag_mz, frag_mz_int = choose_background_and_query(mol_id = mol_id, change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3,
+                                                    col_energy = col_energy, col_gas = col_gas,
+                                                    ion_mode = ion_mode, inst_type = inst_type,
+                                                    adduct = adduct, q3 = q3, top_n = top_n, spectra_filt = spectra_filt)
+    if len(query) != 0:
+        interferences = len(background)
+        if interferences == 0:
+            unique = 1
+        else:
+            unique = 0
+            
+    else:
+        interferences = -1
+        unique = -1
+
+    return interferences
 
 """
 function MS1profiler:
@@ -251,15 +324,15 @@ Input: parameters for choose_background_and_query (q3 stays False in this case, 
 Output: compounds list with added columns of 'USI1' and 'Average Interference', count plot (interferences and USI1 for all mol_id, based on range of prec_mz) 
 """
 #adduct = ['[M+H]+', '[M+Na]+', '[2M+H]+', '[M+K]+'] - first try
-#adduct = [] - second try 
+#adduct = ['[M+H]+', '[M+Na]+', '[M-H]-', '[M+H-H20]+'] - second try 
 
-def MS1profiler(change = 0.7, ppm = 0, change_q3 = 0, ppm_q3 = 0, col_energy = 35, col_gas = '', ion_mode = '',inst_type = 'HCD',
-               adduct = [], q3 = False, top_n = 10, mol_id = 0):
+def MS1profiler(change = 0.7, ppm = 0, change_q3 = 0, ppm_q3 = 0, col_energy = 35, col_gas = '', ion_mode = 'P',inst_type = 'HCD',
+               adduct = ['[M+H]+', '[M+Na]+', '[M-H]-', '[M+H-H20]+'], q3 = False, top_n = 10, mol_id = 0):
     allcomp, spectra = read(compounds = 'df_comp.pkl', spectra = 'df_spec.pkl')
     compounds_filt = filter2(compounds_filt = allcomp)
     spectra_filt = spectra.loc[spectra['mol_id'].isin(list(compounds_filt.mol_id))]
     start = time.time()
-    profiled = profile(change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3, col_energy = 35, col_gas = '', ion_mode = '',inst_type = 'HCD',
+    profiled, interferences = profile(change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3, col_energy = 35, col_gas = '', ion_mode = '',inst_type = 'HCD',
                        adduct = adduct, q3 = False, top_n = 0, mol_id = mol_id, compounds_filt = compounds_filt,
                        spectra_filt = spectra_filt)
     profiled_filtered = profiled.loc[profiled['Interferences'] != -1]
@@ -268,7 +341,8 @@ def MS1profiler(change = 0.7, ppm = 0, change_q3 = 0, ppm_q3 = 0, col_energy = 3
     print("The unique identities and interferences for all mol_id will now be shown for MS1 profiling")
     print("The number of unique mol_id is: " + str(len([x for x in profiled['USI1'] if x == 1])))
     print("Time to completion of profiler: " + str(end-start))
-    plot_interferences(x = list_mol_ids, y = profiled_filtered['Interferences'], title = " MS1 Interferences vs. mol_id")
+    #plot_interferences(x = list_mol_ids, y = profiled_filtered['Interferences'], title = " MS1 Interferences vs. mol_id")
+    plot_interferences(x = list_mol_ids, y = Interferences['Interferences'], title = " MS1 Interferences vs. mol_id")
     plot_unique_identities(x = list_mol_ids, y = profiled_filtered['USI1'], title = 'MS1 USI1 vs. mol_id')
     return profiled
 
@@ -283,12 +357,12 @@ Input: parameters for choose_background_and_query (q3 stays True in this case, q
 Output: compounds list with added columns of 'USI1' and 'Average Interference', count plot (interferences and USI1 for all mol_id, based on range of prec_mz) 
 """
 def MRMprofiler(change = 0.7, ppm = 0, change_q3 = 0.7, ppm_q3 = 0, col_energy = 35, col_gas = '',
-                ion_mode = '',inst_type = 'HCD', adduct = [], q3 = True, top_n = 10, mol_id = 0):
+                ion_mode = 'P',inst_type = 'HCD', adduct = ['[M+H]+', '[M+Na]+', '[M-H]-', '[M+H-H20]+'], q3 = True, top_n = 0.1, mol_id = 0):
     allcomp, spectra = read(compounds = 'df_comp.pkl', spectra = 'df_spec.pkl')
     compounds_filt = filter2(compounds_filt = allcomp)
     spectra_filt = spectra.loc[spectra['mol_id'].isin(list(compounds_filt.mol_id))]
     start = time.time()
-    profiled = profile(change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3, col_energy = 35, col_gas = '',
+    profiled, interferences = profile(change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3, col_energy = 35, col_gas = '',
                        ion_mode = '',inst_type = 'HCD', adduct = adduct, q3 = True, top_n = 0.1, mol_id = mol_id,
                        compounds_filt = compounds_filt, spectra_filt = spectra_filt)
     profiled_filtered = profiled.loc[profiled['Interferences'] != -1]
@@ -297,7 +371,8 @@ def MRMprofiler(change = 0.7, ppm = 0, change_q3 = 0.7, ppm_q3 = 0, col_energy =
     print("The unique identities and interferences for all mol_id will now be shown for MRM profiling")
     print("The number of unique mol_id is: " + str(len([x for x in profiled['USI1'] if x == 1])))
     print("Time to completion of profiler: " + str(end-start))    
-    plot_interferences(x = list_mol_ids, y = profiled['Interferences'], title = " MRM Interferences vs. mol_id")
+    #plot_interferences(x = list_mol_ids, y = profiled['Interferences'], title = " MRM Interferences vs. mol_id")
+    plot_interferences(x = list_mol_ids, y = Interferences['Interferences'], title = " MS1 Interferences vs. mol_id")
     plot_unique_identities(x = list_mol_ids, y = profiled['USI1'], title = 'MRM USI1 vs. mol_id')
     return profiled
 
@@ -312,21 +387,22 @@ Input: parameters for choose_background_and_query (q3 stays True in this case, q
 Output: compounds list with added columns of 'USI1' and 'Average Interference', count plot (interferences and USI1 for all mol_id, based on range of prec_mz) 
 """
 def SWATHprofiler(change = 25, ppm = 0, change_q3 = 0, ppm_q3 = 20, col_energy = 35, col_gas = '',
-                ion_mode = '',inst_type = 'HCD', adduct = [], q3 = True, top_n = 0.1, mol_id = 0):
+                ion_mode = 'P',inst_type = 'HCD', adduct = ['[M+H]+', '[M+Na]+', '[M-H]-', '[M+H-H20]+'], q3 = True, top_n = 0.1, mol_id = 0):
     allcomp, spectra = read(compounds = 'df_comp.pkl', spectra = 'df_spec.pkl')
     compounds_filt = filter2(compounds_filt = allcomp)
     spectra_filt = spectra.loc[spectra['mol_id'].isin(list(compounds_filt.mol_id))]
     start = time.time()
-    profiled = profile(change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3, col_energy = 35, col_gas = '',
-                       ion_mode = '',inst_type = 'HCD', adduct = adduct, q3 = True, top_n = 10, mol_id = mol_id,
+    profiled, interferences = profile(change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3, col_energy = 35, col_gas = '',
+                       ion_mode = '',inst_type = 'HCD', adduct = adduct, q3 = True, top_n = 0.1, mol_id = mol_id,
                        compounds_filt = compounds_filt, spectra_filt = spectra_filt)
     profiled_filtered = profiled.loc[profiled['Interferences'] != -1]
     end = time.time()
     list_mol_ids = list(profiled.mol_id)
-    print("The unique identities and interferences for all mol_id will now be shown for MS1 profiling")
+    print("The unique identities and interferences for all mol_id will now be shown for SWATH profiling")
     print("The number of unique mol_id is: " + str(len([x for x in profiled['USI1'] if x == 1])))
     print("Time to completion of profiler: " + str(end-start))
-    plot_interferences(x = list_mol_ids, y = profiled['Interferences'], title = " SWATH Interferences vs. mol_id")
+    #plot_interferences(x = list_mol_ids, y = profiled['Interferences'], title = " SWATH Interferences vs. mol_id")
+    plot_interferences(x = list_mol_ids, y = Interferences['Interferences'], title = " MS1 Interferences vs. mol_id")
     plot_unique_identities(x = list_mol_ids, y = profiled['USI1'], title = 'SWATH USI1 vs. mol_id')
     return profiled
 
@@ -339,19 +415,18 @@ for a specific mol_id. From this, we can decipher the range within the most opti
 Input: mol_id, interferences or USI1 (boolean values, based on what plot you would like to obtain) 
 Output: barplot (x = ppm list, y = number of interferences or UIS1 for the mol_id) 
 """
-def compare_ppm_q1(mol_id, interferences = True, USI1 = False):
-    ppm_list = [0.1, 0.5, 1, 5, 10, 15, 20, 100, 100000, 700000, 2500000, 25000000]
+def compare_ppm_q1(mol_id):
+    allcomp, spectra = read(compounds = 'df_comp.pkl', spectra = 'df_spec.pkl')
+    compounds_filt = filter2(compounds_filt = allcomp)
+    spectra_filt = spectra.loc[spectra['mol_id'].isin(list(compounds_filt.mol_id))]
+    ppm_list = [0.1, 0.7, 2.5, 25]#[100000, 700000, 2500000, 25000000]#[0.1, 0.5, 1, 5, 10, 15, 20, 100]#, 100000, 700000, 2500000, 25000000]
     y = []
-    if interferences == True:
-        for p in ppm_list:
-            mol = MS1profiler(ppm = p, mol_id = mol_id)
-            y.append(mol.loc[mol['mol_id'] == mol_id]['Average Interference'])
-        ylabel = 'Average Interference'
-    if USI1 == True:
-        for p in ppm_list:
-            mol = MS1profiler(ppm = p)
-            y.append(mol.loc[mol['mol_id'] == mol_id]['USI1'])
-        ylabel = 'USI1'
+    for p in ppm_list:
+        print(p)
+        interferences = profile_specific(compounds_filt, spectra_filt, mol_id = mol_id, change = p , ppm = 0, change_q3 = 0, ppm_q3 = 0)
+        y.append(interferences)
+    ylabel = 'Average Interference'
+
     print(y)
     y = [int(x) for x in y]
     fig = plt.figure(figsize = (8,8))
@@ -371,20 +446,19 @@ for a specific mol_id. From this, we can decipher the range within the most opti
 Input: mol_id, interferences or USI1 (boolean values, based on what plot you would like to obtain) 
 Output: barplot (x = ppm list, y = number of interferences or UIS1 for the mol_id) 
 """
-def compare_ppm_q3(mol_id, interferences = True, USI1 = False):
-    ppm_list = [0.1, 0.5, 1, 5, 10, 15, 20, 100, 100000, 700000, 2500000, 25000000]
+def compare_ppm_q3(mol_id):
+    allcomp, spectra = read(compounds = 'df_comp.pkl', spectra = 'df_spec.pkl')
+    compounds_filt = filter2(compounds_filt = allcomp)
+    spectra_filt = spectra.loc[spectra['mol_id'].isin(list(compounds_filt.mol_id))]
+    ppm_list = [0.1, 0.7, 2.5, 25]#[100000, 700000, 2500000, 25000000]#[0.1, 0.5, 1, 5, 10, 15, 20, 100]#[0.1, 0.5, 1, 5, 10, 15, 20, 100, 100000, 700000, 2500000, 25000000]
     y = []
-    if interferences == True:
-        for p in ppm_list:
-            mol = SWATHprofiler(ppm_q3 = p, mol_id = mol_id)
-            y.append(mol.loc[mol['mol_id'] == mol_id]['Average Interference'])
-        ylabel = 'Average Interference'
-    if USI1 == True:
-        for p in ppm_list:
-            mol = SWATHprofiler(ppm = p)
-            y.append(mol.loc[mol['mol_id'] == mol_id]['USI1'])
-        ylabel = 'USI1'
+    for p in ppm_list:
+        interferences = profile_specific(compounds_filt, spectra_filt, mol_id = mol_id, change = 25, ppm = 0, change_q3 = p, ppm_q3 = 0)
+        y.append(interferences)
 
+    ylabel = 'Average Interference'
+
+    print(y)
     y = [int(x) for x in y]
     fig = plt.figure(figsize = (8,8))
     ax = fig.add_subplot(1,1,1)
@@ -411,7 +485,7 @@ def plot_interferences(x, y, xlabel = "Molecular ID", ylabel = "Interferences" ,
     ax = sns.distplot(list(y),bins = 100,kde = False, hist_kws={'range': (min(list(y)), max(list(y)))})
     ax.grid()
     plt.show()     
-
+ 
 """
 function plot_unique_identities:
 Plotting the UIS1 for all mol_id as a range based on prec_mz
@@ -427,3 +501,8 @@ def plot_unique_identities(x, y, xlabel = "Molecular ID", ylabel = "USI1" , titl
     ax = sns.distplot(list(y),bins = 20,kde = False, hist_kws={'range': (min(list(y)), max(list(y)))})
     ax.grid()
     plt.show()
+
+
+#################actual code
+#mrm = MRMprofiler(change=25, change_q3 = 0.7)
+#mrm.to_csv(r"C:\Users\premy\Desktop\Rost Lab\NIST_17_PREMY\mrmjune29.csv")
