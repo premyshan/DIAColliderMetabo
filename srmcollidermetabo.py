@@ -406,7 +406,7 @@ def collision_energy_optimizer():
             background_id = list(set(background['mol_id']))
             numcomp2 = len(background_id) #NUMBER OF ISOTOPES
 
-            score_mat = both_mat[query_spec_idx,background_spec_idx]
+            score_mat = both_mat[query_spec_idx][:,background_spec_idx]
             assert not score_mat.size == 0
             ces_row = ce_vec[query_spec_idx]
             ces_col = ce_vec[background_spec_idx]
