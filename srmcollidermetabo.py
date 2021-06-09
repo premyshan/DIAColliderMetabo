@@ -299,39 +299,35 @@ def method_profiler(compounds_filt, spectra_filt,change = 0, ppm = 0, change_q3 
 def transition_counter(compounds_filt, spectra_filt):
     trans = []
     for i, row in spectra_filt.iterrows():
-        query_prec_mz = float(row['prec_mz'])
-        multiplier=10**2
-        f2 = math.floor(query_prec_mz*multiplier+0.5)/multiplier
-
+        query_prec_mz = row['prec_mz']
+        f2 = my_round(query_prec_mz)
         query_frag_mz =  list(row['peaks'])
         query_frag_mz.sort(key = lambda x: x[1], reverse = True)
-        f1 = [((math.floor(a*multiplier+0.5)/multiplier),b) for (a,b) in query_frag_mz]
+        f1 = [(my_round(a)),b) for (a,b) in query_frag_mz]
         f1 = [(a,b) for (a,b) in f1 if a==f2]
         trans.append(row['num_peaks']-len(f1))
     spectra_filt['trans']=trans
     spectra_filt= spectra_filt.loc[spectra_filt['trans']>=3]
     compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt.mol_id)]
-    return compounds_filt, spectra_filtdef transition_counter(compounds_filt, spectra_filt):
+    return compounds_filt, spectra_filt
 
 def collision_energy_optimizer(compounds_filt, spectra_filt): 
     collision_energy = []
-    isotope_num = []
+    spectra_num = []
     numcomp = []
     collision_all = []
-    # QQ: why do you keep making copies?
     copy = compounds_filt.copy()
     spectra_filt = spectra_filt.loc[spectra_filt['mol_id'].isin(list(copy.mol_id))]
     mz=[]
 
     for i, molecule in copy.iterrows(): #find optimal CE for each compound
         molidp = molecule['mol_id']
-        query, background, UIS, Interferences, Transitions  = choose_background_and_query(mol_id = molidp, col_energy = 0, change=25, q3 = False, spectra_filt = spectra_filt.copy(),
+        query, background, uis, Interferences, Transitions  = choose_background_and_query(mol_id = molidp, col_energy = 0, change=25, q3 = False, spectra_filt = spectra_filt.copy(),
                                                                                           choose=False, top_n=0, adduct=['[M+H]+'])
-
         mz.append(set(query['prec_mz']))
         collision_opt=[]
 
-        isotope_num.append(len(background['mol_id']))
+        spectra_num.append(len(background['mol_id']))
         numcomp2 = 0 
             
         if len(background)>=1: #if theres is an intef
@@ -364,7 +360,7 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     
     copy['AllCE'] = collision_all
     copy['Optimal Collision Energy'] = collision_energy
-    copy['Isotopes'] = isotope_num
+    copy['Isotopes'] = spectra_num
     copy['NumComp'] = numcomp
     copy['m/z'] = mz
     copy.to_csv("CE_opt_604_qtof_25da_mh.csv")
