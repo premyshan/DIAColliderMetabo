@@ -293,7 +293,7 @@ def optimal_ce_filter(compounds_filt, spectra_filt):
         f2 = my_round(query_prec_mz)
         query_frag_mz =  list(row['peaks'])
         query_frag_mz.sort(key = lambda x: x[1], reverse = True)
-        f1 = [(my_round(a)),b) for (a,b) in query_frag_mz]
+        f1 = [(my_round(a),b) for (a,b) in query_frag_mz]
         f1 = [(a,b) for (a,b) in f1 if a==f2]
         trans.append(row['num_peaks']-len(f1))
     spectra_filt['trans']=trans
