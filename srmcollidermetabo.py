@@ -95,7 +95,7 @@ def filter2(compounds_filt, spectra, col_energy = 35, col_gas = '', ion_mode = '
     
     if adduct != []:
         adduct = [str(x) for x in adduct]
-        spectra_filt_add = spectra_filt_add.loc[spectra_filt_add['prec_type'].isin(adduct)]
+        spectra_filt_add = spectra_filt_all.loc[spectra_filt_all['prec_type'].isin(adduct)]
     else:
         spectra_filt_add = spectra_filt_all
        
