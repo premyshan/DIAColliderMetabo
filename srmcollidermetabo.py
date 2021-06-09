@@ -286,7 +286,7 @@ def method_profiler(compounds_filt, spectra_filt,change = 0, ppm = 0, change_q3 
 #CE Optimization
 #filter2 --> filters the data based on instrument type, pos ion mode and adduct (just M+H)
 #choose_back_and_query --> chooses the interferring compounds for the query based on the given conditions
-def transition_counter(compounds_filt, spectra_filt):
+def optimal_ce_filter(compounds_filt, spectra_filt):
     trans = []
     for i, row in spectra_filt.iterrows():
         query_prec_mz = row['prec_mz']
@@ -298,6 +298,7 @@ def transition_counter(compounds_filt, spectra_filt):
         trans.append(row['num_peaks']-len(f1))
     spectra_filt['trans']=trans
     spectra_filt= spectra_filt.loc[spectra_filt['trans']>=3]
+    spectra_filt = spectra_filt[spectra_filt['mol_id'].map(spectra_filt['mol_id'].value_counts()) > 1]
     compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt.mol_id)]
     return compounds_filt, spectra_filt
 
