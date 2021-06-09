@@ -186,7 +186,7 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
         
         assert len(adduct) == 1, adduct
         query=query_opt
-        query_prec_mz=float(list(query_opt['prec_mz'])[0])
+        query_prec_mz=list(query_opt['prec_mz'])[0]
             
         if ppm != 0:
             change = (ppm/1000000.0)*(query_prec_mz)
