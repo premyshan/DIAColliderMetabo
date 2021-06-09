@@ -56,13 +56,13 @@ def read(compounds, spectra):
     return cf, spectra
 
 """
-function filter:
+function filter_comp:
 Filter the compound list based on the inchikey to take out chiral isomers but keep structural isomers. 
 
 input: Original list of compounds 
 output: Filtered compound list
 """
-def filter2(compounds_filt, spectra, col_energy = 35, col_gas = '', ion_mode = 'P',inst_type = ['Q-TOF', 'HCD'], adduct = ['[M+H]+', '[M+Na]+']):
+def filter_comp(compounds_filt, spectra, col_energy = 35, col_gas = '', ion_mode = 'P',inst_type = ['Q-TOF', 'HCD'], adduct = ['[M+H]+', '[M+Na]+']):
     compounds_filt['inchikey'] = compounds_filt['inchikey'].str[:14]
 
     compounds_filt = compounds_filt.drop_duplicates(subset='inchikey', keep=False)
@@ -283,7 +283,7 @@ def method_profiler(compounds_filt, spectra_filt,change = 0, ppm = 0, change_q3 
     return profiled
 
 #CE Optimization
-#filter2 --> filters the data based on instrument type, pos ion mode and adduct (just M+H)
+#filter_comp--> filters the data based on instrument type, pos ion mode and adduct (just M+H)
 #choose_back_and_query --> chooses the interferring compounds for the query based on the given conditions
 def optimal_ce_filter(compounds_filt, spectra_filt):
     trans = []
