@@ -231,7 +231,7 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
         transitions = -1
     return query, background_filt, uis, interferences, transitions  
 
-  """
+"""
 function profile:
 Based on the given parameters calculates the number of USI and Interferences by mol_id.
 Input: parameters for choose_background_and_query
@@ -244,7 +244,7 @@ def profile(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, pp
     for i, molecule in compounds_filt.iterrows():
         molid = molecule['mol_id']
         query, background, uis, interferences, transitions = choose_background_and_query(mol_id = molid, change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3,
-                                                                                         adduct = adduct, col_energy = col_energy, q3 = q3, top_n = top_n, spectra_filt = spectra_filt.copy(), uis_num=uis_num)
+                                                                                         adduct = adduct, col_energy = col_energy, q3 = q3, top_n = top_n, spectra_filt = spectra_filt, uis_num=uis_num)
         
         uis_all.append(uis)
         int_all.append(interferences)
@@ -262,7 +262,7 @@ Output: compounds list with added columns of 'USI1' and 'Average Interference', 
 """
 def profile_specific(compounds_filt, spectra_filt, mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy=35, q3 = False, top_n = 0.1, uis_num = 0):
     query, background, uis, interferences, transitions = choose_background_and_query(mol_id = mol_id, change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3,
-                                                                                     col_energy = col_energy,adduct = adduct, q3 = q3, top_n = top_n, spectra_filt = spectra_filt.copy(), uis_num=uis_num)
+                                                                                     col_energy = col_energy,adduct = adduct, q3 = q3, top_n = top_n, spectra_filt = spectra_filt, uis_num=uis_num)
     return interferences, uis 
 
 """
@@ -300,6 +300,7 @@ def optimal_ce_filter(compounds_filt, spectra_filt):
     spectra_filt= spectra_filt.loc[spectra_filt['trans']>=3]
     spectra_filt = spectra_filt[spectra_filt['mol_id'].map(spectra_filt['mol_id'].value_counts()) > 1]
     compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt.mol_id)]
+    spectra_filt = spectra_filt.loc[spectra_filt['mol_id'].isin(list(copy.mol_id))]
     return compounds_filt, spectra_filt
 
 def collision_energy_optimizer(compounds_filt, spectra_filt): 
@@ -307,13 +308,11 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     spectra_num = []
     numcomp = []
     collision_all = []
-    copy = compounds_filt.copy()
-    spectra_filt = spectra_filt.loc[spectra_filt['mol_id'].isin(list(copy.mol_id))]
     mz=[]
 
-    for i, molecule in copy.iterrows(): #find optimal CE for each compound
+    for i, molecule in compounds_filt.iterrows(): #find optimal CE for each compound
         molidp = molecule['mol_id']
-        query, background, uis, interferences, transitions  = choose_background_and_query(mol_id = molidp, col_energy = 0, change=25, q3 = False, spectra_filt = spectra_filt.copy(),
+        query, background, uis, interferences, transitions  = choose_background_and_query(mol_id = molidp, col_energy = 0, change=25, q3 = False, spectra_filt = spectra_filt,
                                                                                           choose=False, top_n=0, adduct=['[M+H]+'])
         mz.append(set(query['prec_mz']))
         collision_opt=[]
@@ -349,12 +348,11 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
                 collision_mode = collision_opt
             collision_energy.append(collision_mode)
     
-    copy['AllCE'] = collision_all
-    copy['Optimal Collision Energy'] = collision_energy
-    copy['Isotopes'] = spectra_num
-    copy['NumComp'] = numcomp
-    copy['m/z'] = mz
-    copy.to_csv("CE_opt_604_qtof_25da_mh.csv")
+    compounds_filt['AllCE'] = collision_all
+    compounds_filt['Optimal Collision Energy'] = collision_energy
+    compounds_filt['Isotopes'] = spectra_num
+    compounds_filt['NumComp'] = numcomp
+    compounds_filt['m/z'] = mz
     return copy
 
 #find (diff in CE, cosine similarity score) for query vs. compared compound 
