@@ -322,7 +322,7 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
 
     for i, molecule in copy.iterrows(): #find optimal CE for each compound
         molidp = molecule['mol_id']
-        query, background, uis, Interferences, Transitions  = choose_background_and_query(mol_id = molidp, col_energy = 0, change=25, q3 = False, spectra_filt = spectra_filt.copy(),
+        query, background, uis, interferences, transitions  = choose_background_and_query(mol_id = molidp, col_energy = 0, change=25, q3 = False, spectra_filt = spectra_filt.copy(),
                                                                                           choose=False, top_n=0, adduct=['[M+H]+'])
         mz.append(set(query['prec_mz']))
         collision_opt=[]
