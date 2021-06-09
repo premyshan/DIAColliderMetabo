@@ -80,11 +80,12 @@ def filter2(compounds_filt, spectra, col_energy = 35, col_gas = '', ion_mode = '
     spectra_filt_all['col_energy'] = spectra_filt_all['col_energy'].apply(lambda x: str(x).split('%')[-1])
     spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy']!=""]
     spectra_filt_all['col_energy'].replace(regex=True,inplace=True,to_replace='[^0-9.]',value=r'')
+    spectra_filt_all.loc[:,'col_energy'] = spectra_filt_all['col_energy'].astype(float)
 
     if col_energy != 0:
         low = int(col_energy)-5
         high = int(col_energy)+5
-        spectra_filt_all = spectra_filt_all.loc[pd.to_numeric(spectra_filt_all['col_energy']).between(low, high, inclusive = True)]
+        spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy'].between(low, high, inclusive = True)]
 
     if col_gas != '':
         spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_gas'] == str(col_gas)]
@@ -128,11 +129,9 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
     
     if (choose==True) and (len(query_opt)!=0):
         if len(query_opt)>1:
-            query_opt['inst'] = pd.Categorical(query_opt['inst_type'], ordered=True, categories=['HCD','Q-TOF','IT-FT/ion trap with FTMS'])
-            query_opt['col_energy'] = pd.to_numeric(query_opt['col_energy'])
             query_opt['ce']=(query_opt['col_energy'] - col_energy).abs()
             query_opt['add'] = pd.Categorical(query_opt['prec_type'], ordered=True, categories=['[M+H]+','[M+Na]+'])
-            query_opt = query_opt.sort_values(['inst','ce','add'], ascending=True)
+            query_opt = query_opt.sort_values(['res','ce','add'], ascending=[False,True,True])
             query=query_opt.iloc[:1]
         else:
             query=query_opt
