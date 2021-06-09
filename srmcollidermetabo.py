@@ -256,23 +256,14 @@ def profile(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, pp
 
 """
 function profile_specific:
-Based on the given parameters calculates the number of USI and Interferences for a specific mol_id that is provided as input.
+Based on the given parameters calculates the number of UIS and Interferences for a specific mol_id that is provided as input.
 Input: parameters for choose_background_and_query, a specific mol_id (mol_id), plot_back = True (will plot interferences if present as range of their prec_mz)
 Output: compounds list with added columns of 'USI1' and 'Average Interference', count plot (interferences for a specific mol_id, based on range of prec_mz) 
 """
 def profile_specific(compounds_filt, spectra_filt, mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy=35, q3 = False, top_n = 0.1, uis_num = 0):
-    query, background, frag_mz, frag_mz_int = choose_background_and_query(mol_id = mol_id, change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3,
-                                                                          adduct = adduct, col_energy = col_energy, q3 = q3, top_n = top_n, spectra_filt = spectra_filt, uis_num=uis_num)
-    if len(query) != 0:
-        interferences = len(np.unique(background.mol_id))
-        if interferences == 0:
-            unique = 1
-        else:
-            unique = 0
-    else:
-        interferences = -1
-        unique = -1
-    return interferences, background 
+    query, background, uis, interferences, transitions = choose_background_and_query(mol_id = mol_id, change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3,
+                                                                                     col_energy = col_energy,adduct = adduct, q3 = q3, top_n = top_n, spectra_filt = spectra_filt.copy(), uis_num=uis_num)
+    return interferences, uis 
 
 """
 function method_profiler:
