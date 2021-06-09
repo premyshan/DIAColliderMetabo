@@ -325,11 +325,11 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
 
             for molid in background_id: #for each isotope
                 compared = background.loc[background['mol_id']==molid]
-                score_matrix = similarity_score3(query_spec=query, compared_spec = compared)
+                score_matrix = similarity_score(query_spec=query, compared_spec = compared)
                 if score_matrix.empty:
                     score=-1
                 else:
-                    score = optimized_score_3(score_matrix)
+                    score = optimized_score(score_matrix)
                     c = Counter(score)
                     score = [a for (a,b) in c.most_common() if b==c.most_common(1)[0][1]]
                 if score != -1:
@@ -355,7 +355,7 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     return copy
 
 #find (diff in CE, cosine similarity score) for query vs. compared compound 
-def similarity_score3(query_spec, compared_spec): 
+def similarity_score(query_spec, compared_spec): 
     scores = []
     coll_diff = []
     both_all = []
@@ -418,7 +418,7 @@ def cosine_vectorized(array1, array2):
     np.seterr(divide='ignore', invalid='ignore')
     return (xy/np.sqrt(x))/np.sqrt(y)
 
-def optimized_score_3(scored_matrix):
+def optimized_score(scored_matrix):
     ces_row_list = np.array(scored_matrix.index) 
     cols = [np.array(col.to_list()) for col_name,col in scored_matrix.iteritems()] 
     matrix = np.stack(cols,axis=1) 
