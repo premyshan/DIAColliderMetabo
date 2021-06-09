@@ -249,10 +249,10 @@ def profile(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, pp
         uis_all.append(uis)
         int_all.append(interferences)
         trans_all.append(transitions)
-    copy['UIS'] = uis_all
-    copy['Interferences'] = int_all
-    copy['Transitions'] = trans_all
-    return copy
+    compounds_filt['UIS'] = uis_all
+    compounds_filt['Interferences'] = int_all
+    compounds_filt['Transitions'] = trans_all
+    return compounds_filt
 
 """
 function profile_specific:
