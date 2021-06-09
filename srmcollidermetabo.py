@@ -91,7 +91,7 @@ def filter2(compounds_filt, spectra, col_energy = 35, col_gas = '', ion_mode = '
 
     spectra_filt_all.loc[:,'peaks'] = spectra_filt_all['peaks'].apply(lambda x: [(a,b/(max(x,key=itemgetter(1))[1])) for (a,b) in x])
     spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['spec_type'] == 'MS2']
-    spectra_filt_all.loc[:,"prec_mz"] = spectra_filt_all["prec_mz"].astype(float)
+    spectra_filt_all.loc[:,'prec_mz'] = spectra_filt_all['prec_mz'].astype(float)
     
     if adduct != []:
         adduct = [str(x) for x in adduct]
@@ -137,7 +137,7 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
         else:
             query=query_opt
 
-        query_prec_mz = float(query['prec_mz'].item())
+        query_prec_mz = query['prec_mz'].item()
         #choosing background
         if ppm != 0:
             change = (ppm/1000000.0)*(query_prec_mz) 
@@ -183,7 +183,6 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
             uis=0
         
     elif (choose==False) and (len(query_opt)!=0):
-        
         assert len(adduct) == 1, adduct
         query=query_opt
         query_prec_mz=list(query_opt['prec_mz'])[0]
