@@ -360,9 +360,7 @@ def similarity_score3(query_spec, compared_spec):
     coll_diff = []
     both_all = []
     
-    query_spec.loc[:,"col_energy"] = query_spec["col_energy"].apply(pd.to_numeric)
     query_spec = query_spec.sort_values(by=['col_energy']) # these are ascending CE
-    compared_spec.loc[:,"col_energy"] = compared_spec["col_energy"].apply(pd.to_numeric)
     compared_spec = compared_spec.sort_values(by=['col_energy'])
     collision_energies_q = list(query_spec['col_energy'])
     collision_energies_c = list(compared_spec['col_energy'])
