@@ -192,7 +192,7 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
         high = query_prec_mz + (change/2.0)
         background_filt = background_filt.loc[background_filt['prec_mz'].between(low, high, inclusive = True)]
         if q3 == True:
-            query_frag_mz =  list(query['peaks'])[0]
+            query_frag_mz = list(query['peaks'])[0]
             query_frag_mz = [(a,b) for (a,b) in query_frag_mz if (b>(top_n))]
             query_frag_mz.sort(key = lambda x: x[1], reverse = True)
 
@@ -270,7 +270,7 @@ Profiles datasets according to specific Q1/Q3 windows
 Input: parameters for choose_background_and_query (q3 stays False in this case, no q3 window is taken into account) 
 Output: compounds list with added columns of 'UIS' and 'Average Interference'
 """
-def method_profiler(compounds_filt, spectra_filt,change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy = 35, q3 = True, top_n = 0.1, mol_id = 0, uis_num = 0,):
+def method_profiler(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy = 35, q3 = True, top_n = 0.1, mol_id = 0, uis_num = 0,):
     start = time.time()
     profiled = profile(change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3, adduct = adduct, col_energy = col_energy,
                        q3 = q3, top_n = top_n, mol_id = mol_id, compounds_filt = compounds_filt, spectra_filt = spectra_filt, uis_num = uis_num)
