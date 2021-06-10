@@ -25,20 +25,9 @@ import difflib
 import re
 import itertools
 import time
-<<<<<<< HEAD
-#import matplotlib.pyplot as plt
-#import seaborn as sns
-#import pyper as pr
-import math
-from math import sqrt
-#import scipy.spatial as sp
-from statistics import mode, mean
-#import ast
-=======
 import math
 from math import sqrt
 from statistics import mode, mean
->>>>>>> master
 from operator import itemgetter
 from collections import Counter
 
