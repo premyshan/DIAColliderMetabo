@@ -277,7 +277,7 @@ def method_profiler(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3
     profiled_filtered = profiled.loc[profiled['Interferences'] != -1]
     end = time.time()
     list_mol_ids = list(profiled_filtered.mol_id)
-    print("The unique identities and interferences for all mol_id will now be shown for method profiling")
+    print("The unique identities and interferences for all mol_id will now be shown:")
     print("The number of unique mol_id is: " + str(len([x for x in profiled['UIS'] if x == 1])))
     print("Time to completion of profiler: " + str(end-start))    
     return profiled
