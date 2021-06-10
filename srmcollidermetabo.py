@@ -25,6 +25,7 @@ import difflib
 import re
 import itertools
 import time
+<<<<<<< HEAD
 #import matplotlib.pyplot as plt
 #import seaborn as sns
 #import pyper as pr
@@ -33,6 +34,11 @@ from math import sqrt
 #import scipy.spatial as sp
 from statistics import mode, mean
 #import ast
+=======
+import math
+from math import sqrt
+from statistics import mode, mean
+>>>>>>> master
 from operator import itemgetter
 from collections import Counter
 
@@ -63,12 +69,13 @@ def read(compounds, spectra):
 
 """
 function filter:
+
 Filter the compound list based on the inchikey to take out chiral isomers but keep structural isomers. 
 
 input: Original list of compounds 
 output: Filtered compound list
 """
-def filter2(compounds_filt, spectra, col_energy = 35, col_gas = '', ion_mode = 'P',inst_type = ['Q-TOF', 'HCD'], adduct = ['[M+H]+', '[M+Na]+']):
+def filter_comp(compounds_filt, spectra, col_energy = 35, col_gas = 'N2', ion_mode = 'P',inst_type = ['Q-TOF', 'HCD'], adduct = ['[M+H]+', '[M+Na]+']):
     compounds_filt['inchikey'] = compounds_filt['inchikey'].str[:14]
 
     compounds_filt = compounds_filt.drop_duplicates(subset='inchikey', keep=False)
@@ -86,11 +93,12 @@ def filter2(compounds_filt, spectra, col_energy = 35, col_gas = '', ion_mode = '
     spectra_filt_all['col_energy'] = spectra_filt_all['col_energy'].apply(lambda x: str(x).split('%')[-1])
     spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy']!=""]
     spectra_filt_all['col_energy'].replace(regex=True,inplace=True,to_replace='[^0-9.]',value=r'')
+    spectra_filt_all.loc[:,'col_energy'] = spectra_filt_all['col_energy'].astype(float)
 
     if col_energy != 0:
         low = int(col_energy)-5
         high = int(col_energy)+5
-        spectra_filt_all = spectra_filt_all.loc[pd.to_numeric(spectra_filt_all['col_energy']).between(low, high, inclusive = True)]
+        spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy'].between(low, high, inclusive = True)]
 
     if col_gas != '':
         spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_gas'] == str(col_gas)]
@@ -98,18 +106,16 @@ def filter2(compounds_filt, spectra, col_energy = 35, col_gas = '', ion_mode = '
     spectra_filt_all.loc[:,'peaks'] = spectra_filt_all['peaks'].apply(lambda x: [(a,b/(max(x,key=itemgetter(1))[1])) for (a,b) in x])
 
     spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['spec_type'] == 'MS2']
-    # this cast is safe when only MS2 spectra remain
-    spectra_filt_all.loc[:,"prec_mz"] = spectra_filt_all["prec_mz"].astype(float)
-
+    spectra_filt_all.loc[:,'prec_mz'] = spectra_filt_all['prec_mz'].astype(float)
+    
     if adduct != []:
         adduct = [str(x) for x in adduct]
-        spectra_filt_add = spectra_filt_add.loc[spectra_filt_add['prec_type'].isin(adduct)]
+        spectra_filt_add = spectra_filt_all.loc[spectra_filt_all['prec_type'].isin(adduct)]
     else:
         spectra_filt_add = spectra_filt_all
+       
     compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt_add.mol_id)]
-
-    spectra_filt = spectra_filt_all
-    return compounds_filt, spectra_filt
+    return compounds_filt, spectra_filt_all
 
 """
 function choose_background_and_query:
@@ -139,12 +145,9 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
     
     if (choose==True) and (len(query_opt)!=0):
         if len(query_opt)>1:
-            # TBD could switch to resolution (maybe)
-            query_opt['inst'] = pd.Categorical(query_opt['inst_type'], ordered=True, categories=['HCD','Q-TOF'])
-            query_opt['col_energy'] = pd.to_numeric(query_opt['col_energy'])
             query_opt['ce']=(query_opt['col_energy'] - col_energy).abs()
             query_opt['add'] = pd.Categorical(query_opt['prec_type'], ordered=True, categories=['[M+H]+','[M+Na]+'])
-            query_opt = query_opt.sort_values(['inst','ce','add'], ascending=True)
+            query_opt = query_opt.sort_values(['res','ce','add'], ascending=[False,True,True])
             query=query_opt.iloc[:1]
         else:
             query=query_opt
@@ -161,7 +164,7 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
         query_frag_mz =  list(query['peaks'])[0]
         query_frag_mz = [(a,b) for (a,b) in query_frag_mz if (b>(top_n))]
         query_frag_mz.sort(key = lambda x: x[1], reverse = True)
-            
+
         f1 = my_round(query_frag_mz[0][0])
         f2 = my_round(query_prec_mz)
 
@@ -169,10 +172,10 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
             start = 0
         else:
             start = 1
-            UIS_num += 1
-        query_frag_mz = query_frag_mz[start:UIS_num]
+            uis_num += 1
+        query_frag_mz = query_frag_mz[start:uis_num]
         query_frag_mz_values = [query[0] for query in query_frag_mz]
-        Transitions=len(query_frag_mz_values)
+        transitions=len(query_frag_mz_values)
 
         if q3 == True:
             for transition in query_frag_mz_values:
@@ -181,71 +184,68 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
 
                 low = transition - (change_q3/2.0)
                 high = transition + (change_q3/2.0)
+
+                transitions_q1 = [[(a,b) for (a,b) in peaklist if a>=low and a<=high and (b>(top_n))] for peaklist in background_filt['peaks']] 
+                transitions_q1 = [x for x in transitions_q1 if x!= []]
+                transitions_q1 = list(itertools.chain.from_iterable(transitions_q1))
+                transitions_q1.sort(key = lambda x: x[1], reverse = True) 
+                background_filt = background_filt.loc[(background_filt['peaks'].apply(lambda x: any(transition in x for transition in transitions_q1)))]
+
+        interferences = len(np.unique(background_filt.mol_id))
+
+        if interferences == 0:
+            uis=1
+        else:
+            uis=0
+        
+    elif (choose==False) and (len(query_opt)!=0):
+        assert len(adduct) == 1, adduct
+        query=query_opt
+        query_prec_mz=list(query_opt['prec_mz'])[0]
+            
+        if ppm != 0:
+            change = (ppm/1000000.0)*(query_prec_mz)
+        low = query_prec_mz - (change/2.0)
+        high = query_prec_mz + (change/2.0)
+        background_filt = background_filt.loc[background_filt['prec_mz'].between(low, high, inclusive = True)]
+        if q3 == True:
+            query_frag_mz = list(query['peaks'])[0]
+            query_frag_mz = [(a,b) for (a,b) in query_frag_mz if (b>(top_n))]
+            query_frag_mz.sort(key = lambda x: x[1], reverse = True)
+
+            f1 = my_round(query_frag_mz[0][0])
+            f2 = my_round(query_prec_mz)
+
+            if f1 != f2:
+                start = 0
+            else:
+                start = 1
+                uis_num+=1
+                
+            query_frag_mz = query_frag_mz[start:uis_num]
+            query_frag_mz_values = [query[0] for query in query_frag_mz]
+            transitions = len(query_frag_mz_values)
+            
+            for transition in query_frag_mz_values:
+                if ppm_q3 != 0:
+                    change_q3 = (ppm_q3/1000000.0)*(transition)
+                low = transition - (change_q3/2.0)
+                high = transition + (change_q3/2.0)
                 transitions_q1 = [[(a,b) for (a,b) in peaklist if a>=low and a<=high and (b>(top_n))] for peaklist in background_filt['peaks']] #do transitions here
                 transitions_q1 = [x for x in transitions_q1 if x!= []]
                 transitions_q1 = list(itertools.chain.from_iterable(transitions_q1))
-                transitions_q1.sort(key = lambda x: x[1], reverse = True) # sort intensity
+                transitions_q1.sort(key = lambda x: x[1], reverse = True) # these are descending intensities
+
                 background_filt = background_filt.loc[(background_filt['peaks'].apply(lambda x: any(transition in x for transition in transitions_q1)))]
-
-        Interferences = len(np.unique(background_filt.mol_id))
-
-        if Interferences == 0:
-            UIS=1
-        else:
-            UIS=0
-        
-    elif (choose==False) and (len(query_opt)!=0):
-        
-        raise NotImplementedError
-        # assert len(adduct) == 1, adduct
-        # query=query_opt
-        # query_prec_mz = query_opt["prec_mz"].reset_index(drop=True).iloc[0]
-            
-        # if ppm != 0:
-        #     change = (ppm/1000000.0)*(query_prec_mz)
-        # low = query_prec_mz - (change/2.0)
-        # high = query_prec_mz + (change/2.0)
-        # background_filt = background_filt.loc[pd.to_numeric(background_filt['prec_mz']).between(low, high, inclusive = True)]
-        # if q3 == True:
-        #     query_frag_mz =  list(query['peaks'])[0]
-        #     query_frag_mz = [(a,b) for (a,b) in query_frag_mz if (b>(top_n))]
-        #     query_frag_mz.sort(key = lambda x: x[1], reverse = True)
-
-        #     f1 = my_round(query_frag_mz[0][0])
-        #     f2 = my_round(query_prec_mz)
-
-        #     if f1 != f2:
-        #         start = 0
-        #     else:
-        #         start = 1
-        #         UIS_num+=1
-                
-        #     query_frag_mz = query_frag_mz[start:UIS_num]
-        #     query_frag_mz_values = [query[0] for query in query_frag_mz]
-        #     Transitions = len(query_frag_mz_values)
-            
-        #     for transition in query_frag_mz_values:
-        #         if ppm_q3 != 0:
-        #             change_q3 = (ppm_q3/1000000.0)*(transition)
-        #         low = transition - (change_q3/2.0)
-        #         high = transition + (change_q3/2.0)
-        #         transitions_q1 = [[(a,b) for (a,b) in peaklist if a>=low and a<=high and (b>(top_n))] for peaklist in background_filt['peaks']] #do transitions here
-        #         transitions_q1 = [x for x in transitions_q1 if x!= []]
-        #         transitions_q1 = list(itertools.chain.from_iterable(transitions_q1))
-        #         transitions_q1.sort(key = lambda x: x[1], reverse = True) # these are descending intensities
-
-        #         background_filt = background_filt.loc[(background_filt['peaks'].apply(lambda x: any(transition in x for transition in transitions_q1)))]
-
-        # UIS = -1
-        # Interferences = -1
-        # Transitions=-1
+        uis = -1
+        interferences = -1
+        transitions=-1
     else:
         query=query_opt
-        UIS = -1
-        Interferences = -1
-        Transitions = -1
-
-    return query, background_filt, UIS, Interferences, Transitions  
+        uis = -1
+        interferences = -1
+        transitions = -1
+    return query, background_filt, uis, interferences, transitions  
 
 """
 function profile:
@@ -253,69 +253,71 @@ Based on the given parameters calculates the number of USI and Interferences by 
 Input: parameters for choose_background_and_query
 Output: compounds list with added columns of 'USI1' and 'Average Interference'
 """
-def profile(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy=35, q3 = True, top_n = 0.1, mol_id = 0, UIS_num=0):
 
-    copy = compounds_filt.copy()
-    
-    UISall = []
-    Intall = []
-    Transall = []
-    for i, molecule in copy.iterrows():
+def profile(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy=35, q3 = True, top_n = 0.1, mol_id = 0, uis_num=0):    
+    uis_all = []
+    int_all = []
+    trans_all = []
+    for i, molecule in compounds_filt.iterrows():
         molid = molecule['mol_id']
-        query, background, UIS, interferences, Transitions = choose_background_and_query(mol_id = molid, change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3,
-                                                                                         adduct = adduct, col_energy = col_energy, q3 = q3, top_n = top_n, spectra_filt = spectra_filt.copy(), UIS_num=UIS_num)
+        query, background, uis, interferences, transitions = choose_background_and_query(mol_id = molid, change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3,
+                                                                                         adduct = adduct, col_energy = col_energy, q3 = q3, top_n = top_n, spectra_filt = spectra_filt, uis_num=uis_num)
         
-        UISall.append(UIS)
-        Intall.append(interferences)
-        Transall.append(Transitions)
-    copy['UIS'] = UISall
-    copy['Interferences'] = Intall
-    copy['Transitions'] = Transall
-    
-    return copy
+        uis_all.append(uis)
+        int_all.append(interferences)
+        trans_all.append(transitions)
+    compounds_filt['UIS'] = uis_all
+    compounds_filt['Interferences'] = int_all
+    compounds_filt['Transitions'] = trans_all
+    return compounds_filt
 
 """
 function profile_specific:
-Based on the given parameters calculates the number of USI and Interferences for a specific mol_id that is provided as input.
+Based on the given parameters calculates the number of UIS and Interferences for a specific mol_id that is provided as input.
 Input: parameters for choose_background_and_query, a specific mol_id (mol_id), plot_back = True (will plot interferences if present as range of their prec_mz)
 Output: compounds list with added columns of 'USI1' and 'Average Interference', count plot (interferences for a specific mol_id, based on range of prec_mz) 
 """
-def profile_specific(compounds_filt, spectra_filt, mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy=35, q3 = False, top_n = 0.1, UIS_num = 0):
-
-    query, background, frag_mz, frag_mz_int = choose_background_and_query(mol_id = mol_id, change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3,
-                                                                          adduct = adduct, col_energy = col_energy, q3 = q3, top_n = top_n, spectra_filt = spectra_filt, UIS_num=UIS_num)
-    if len(query) != 0:
-        interferences = len(np.unique(background.mol_id))
-        if interferences == 0:
-            unique = 1
-        else:
-            unique = 0
-            
-    else:
-        interferences = -1
-        unique = -1
-
-    return interferences, background 
-
+def profile_specific(compounds_filt, spectra_filt, mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy=35, q3 = False, top_n = 0.1, uis_num = 0):
+    query, background, uis, interferences, transitions = choose_background_and_query(mol_id = mol_id, change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3,
+                                                                                     col_energy = col_energy,adduct = adduct, q3 = q3, top_n = top_n, spectra_filt = spectra_filt, uis_num=uis_num)
+    return interferences, uis 
 
 """
-function MethodProfiler:
+function method_profiler:
 Profiles datasets according to specific Q1/Q3 windows 
 Input: parameters for choose_background_and_query (q3 stays False in this case, no q3 window is taken into account) 
 Output: compounds list with added columns of 'UIS' and 'Average Interference'
 """
-def MethodProfiler(compounds_filt, spectra_filt,change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy = 35, q3 = True, top_n = 0.1, mol_id = 0, UIS_num = 0,):
+
+def method_profiler(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy = 35, q3 = True, top_n = 0.1, mol_id = 0, uis_num = 0,):
     start = time.time()
     profiled = profile(change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3, adduct = adduct, col_energy = col_energy,
-                       q3 = q3, top_n = top_n, mol_id = mol_id, compounds_filt = compounds_filt, spectra_filt = spectra_filt, UIS_num = UIS_num)
+                       q3 = q3, top_n = top_n, mol_id = mol_id, compounds_filt = compounds_filt, spectra_filt = spectra_filt, uis_num = uis_num)
     profiled_filtered = profiled.loc[profiled['Interferences'] != -1]
     end = time.time()
     list_mol_ids = list(profiled_filtered.mol_id)
-    print("The unique identities and interferences for all mol_id will now be shown for MRM profiling")
+    print("The unique identities and interferences for all mol_id will now be shown:")
     print("The number of unique mol_id is: " + str(len([x for x in profiled['UIS'] if x == 1])))
     print("Time to completion of profiler: " + str(end-start))    
     return profiled
 
+# look at this
+def optimal_ce_filter(compounds_filt, spectra_filt):
+    trans = []
+    for i, row in spectra_filt.iterrows():
+        query_prec_mz = row['prec_mz']
+        f2 = my_round(query_prec_mz)
+        query_frag_mz =  list(row['peaks'])
+        query_frag_mz.sort(key = lambda x: x[1], reverse = True)
+        f1 = [(my_round(a),b) for (a,b) in query_frag_mz]
+        f1 = [(a,b) for (a,b) in f1 if a==f2]
+        trans.append(row['num_peaks']-len(f1))
+    spectra_filt['trans']=trans
+    spectra_filt= spectra_filt.loc[spectra_filt['trans']>=3]
+    spectra_filt = spectra_filt[spectra_filt['mol_id'].map(spectra_filt['mol_id'].value_counts()) > 1]
+    compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt.mol_id)]
+    spectra_filt = spectra_filt.loc[spectra_filt['mol_id'].isin(list(copy.mol_id))]
+    return compounds_filt, spectra_filt
 
 #CE Optimization
 #filter2 --> filters the data based on instrument type, pos ion mode and adduct (just M+H)
@@ -433,74 +435,6 @@ def collision_energy_optimizer():
     copy['m/z'] = mz
     copy.to_csv("CE_opt_604_qtof_25da_mh.csv")
     return copy
-
-# #find (diff in CE, cosine similarity score) for query vs. compared compound 
-# def similarity_score(query_spec, compared_spec): 
-#     # TBD this entire function can be replaced with sparse matrix multiplication
-
-#     scores = []
-#     coll_diff = []
-#     both_all = []
-    
-#     query_spec.loc[:,"col_energy"] = query_spec["col_energy"].apply(pd.to_numeric)
-#     query_spec = query_spec.sort_values(by=['col_energy']) # these are ascending CE
-#     compared_spec.loc[:,"col_energy"] = compared_spec["col_energy"].apply(pd.to_numeric)
-#     compared_spec = compared_spec.sort_values(by=['col_energy'])
-#     collision_energies_q = list(query_spec['col_energy'])
-#     collision_energies_c = list(compared_spec['col_energy'])
-
-#     for query_c in collision_energies_q:
-#         query_spectra2 = query_spec.loc[query_spec['col_energy'] == query_c]
-#         query = list(query_spectra2['peaks'])[0]
-#         query.sort(key = lambda  x: x[1], reverse = True) # these are ascending intensity
-#         query_norm = [(round(a),(b*100)) for (a,b) in query] #ROUND TO NEAREST DA
-#         query_df = pd.DataFrame(query_norm, columns = ['m/z', 'int'])
-#         query_score = []
-#         query_coll_diff = []
-#         both = []
-
-#         for compare_c in collision_energies_c:
-#             compared_spectra2 = compared_spec.loc[compared_spec['col_energy'] == compare_c]
-#             compare = list(compared_spectra2['peaks'])[0]
-#             compare.sort(key = lambda  x: x[1], reverse = True)
-#             compare_norm = [(round(a),(b*100)) for (a,b) in compare] # ROUND TO NEAREST DA
-#             compare_df = pd.DataFrame(compare_norm, columns = ['m/z', 'int'])
-
-#             aligned_df = pd.merge(query_df, compare_df, on='m/z', how = 'outer') #OUTER MERGE
-#             aligned_df.fillna(0, inplace = True)
-
-#             #score
-#             u = aligned_df['int_x'].values.reshape(1,-1)
-#             v = aligned_df['int_y'].values.reshape(1,-1)
-
-#             score = cosine_vectorized(u,v)
-
-#             if math.isnan(score[0][0])==True:
-#                 score[0][0]=0.0
-            
-#             query_score.append(score[0][0])
-#             query_coll_diff.append(abs(int(compare_c)-int(query_c)))
-#             both.append([(abs(int(compare_c)-int(query_c))), score[0][0]])
-
-#         scores.append(query_score)
-#         coll_diff.append(query_coll_diff)
-#         both_all.append(both)
-
-#     #check if all scores are 0 - if so , throw out
-#     if all(all(v == 0.0 for v in sublist) for sublist in scores):
-#         all_df= pd.DataFrame
-#     else:
-#         all_df = pd.DataFrame(both_all)
-#         all_df.columns = collision_energies_c
-#         all_df.index = collision_energies_q
-#     return(all_df)
-
-# def cosine_vectorized(array1, array2):
-#     y = (array2**2).sum(1)
-#     x = (array1**2).sum(1, keepdims=1)
-#     xy = array1.dot(array2.T) #dot product is same as transpose of one times other
-#     np.seterr(divide='ignore', invalid='ignore')
-#     return (xy/np.sqrt(x))/np.sqrt(y)
 
 def compute_optimal_ces(matrix,ces_row,ces_col):
     
