@@ -124,6 +124,7 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
         adduct = [str(x) for x in adduct]
         query_opt = query_opt.loc[query_opt['prec_type'].isin(adduct)]
 
+    query_opt = query_opt.reset_index(drop=True)
     same = spectra_filt.loc[spectra_filt['mol_id']==mol_id]
     background_filt = spectra_filt.drop(same.index) #drop spectra from same mol_id
     
