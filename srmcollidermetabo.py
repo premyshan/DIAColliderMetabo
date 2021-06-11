@@ -286,7 +286,8 @@ def method_profiler(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3
 #CE Optimization
 #filter_comp--> filters the data based on instrument type, pos ion mode and adduct (just M+H)
 #choose_back_and_query --> chooses the interferring compounds for the query based on the given conditions
-def optimal_ce_filter(compounds_filt, spectra_filt):
+def optimal_ce_filter(compounds_filt, spectra_filt, adduct='[M+H]+'):
+    spectra_filt = spectra_filt.loc[spectra_filt['prec_type']== adduct]
     trans = []
     for i, row in spectra_filt.iterrows():
         query_prec_mz = row['prec_mz']
@@ -298,17 +299,17 @@ def optimal_ce_filter(compounds_filt, spectra_filt):
         trans.append(row['num_peaks']-len(f1))
     spectra_filt['trans']=trans
     spectra_filt= spectra_filt.loc[spectra_filt['trans']>=3]
-    spectra_filt = spectra_filt[spectra_filt['mol_id'].map(spectra_filt['mol_id'].value_counts()) > 1]
     compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt.mol_id)]
-    spectra_filt = spectra_filt.loc[spectra_filt['mol_id'].isin(list(copy.mol_id))]
     return compounds_filt, spectra_filt
 
 def collision_energy_optimizer(compounds_filt, spectra_filt): 
     collision_energy = []
-    spectra_num = []
-    numcomp = []
+    num_spectra = []
+    num_comp = []
     collision_all = []
     mz=[]
+    spectra_filt = spectra_filt[spectra_filt['mol_id'].map(spectra_filt['mol_id'].value_counts()) > 1]
+    compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt.mol_id)]
 
     for i, molecule in compounds_filt.iterrows(): #find optimal CE for each compound
         molidp = molecule['mol_id']
@@ -317,12 +318,12 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
         mz.append(set(query['prec_mz']))
         collision_opt=[]
 
-        spectra_num.append(len(background['mol_id']))
-        numcomp2 = 0 
+        num_spectra.append(len(background['mol_id']))
+        numcomp = 0 
             
         if len(background)>=1: #if theres is an intef
             background_id = list(set(background['mol_id']))
-            numcomp2 = len(background_id) #NUMBER OF ISOTOPES
+            numcomp = len(background_id) #NUMBER OF ISOTOPES
 
             for molid in background_id: #for each isotope
                 compared = background.loc[background['mol_id']==molid]
@@ -335,7 +336,7 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
                     score = [a for (a,b) in c.most_common() if b==c.most_common(1)[0][1]]
                 if score != -1:
                     collision_opt.append(score)                
-        numcomp.append(numcomp2)
+        num_comp.append(numcomp)
         collision_all.append(collision_opt)
         collision_opt = (list(itertools.chain.from_iterable(collision_opt)))
         
@@ -350,8 +351,8 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     
     compounds_filt['AllCE'] = collision_all
     compounds_filt['Optimal Collision Energy'] = collision_energy
-    compounds_filt['Isotopes'] = spectra_num
-    compounds_filt['NumComp'] = numcomp
+    compounds_filt['NumSpectra'] = num_spectra
+    compounds_filt['NumComp'] = num_comp
     compounds_filt['m/z'] = mz
     return copy
 
@@ -369,8 +370,9 @@ def similarity_score(query_spec, compared_spec):
     for query_c in collision_energies_q:
         query_spectra2 = query_spec.loc[query_spec['col_energy'] == query_c]
         query = list(query_spectra2['peaks'])[0]
-        query.sort(key = lambda  x: x[1], reverse = True) # these are ascending intensity
         query_norm = [(round(a),(b*100)) for (a,b) in query] #ROUND TO NEAREST DA
+        query_norm = [(uk,sum([vv for kk,vv in query_norm if kk==uk])) for uk in set([k for k,v in query_norm])]
+        query_norm.sort(key = lambda  x: x[1], reverse = True) # these are ascending intensity
         query_df = pd.DataFrame(query_norm, columns = ['m/z', 'int'])
         query_score = []
         query_coll_diff = []
@@ -379,8 +381,9 @@ def similarity_score(query_spec, compared_spec):
         for compare_c in collision_energies_c:
             compared_spectra2 = compared_spec.loc[compared_spec['col_energy'] == compare_c]
             compare = list(compared_spectra2['peaks'])[0]
-            compare.sort(key = lambda  x: x[1], reverse = True)
             compare_norm = [(round(a),(b*100)) for (a,b) in compare] # ROUND TO NEAREST DA
+            compare_norm = [(uk,sum([vv for kk,vv in compare_norm if kk==uk])) for uk in set([k for k,v in compare_norm])]
+            compare_norm.sort(key = lambda  x: x[1], reverse = True)
             compare_df = pd.DataFrame(compare_norm, columns = ['m/z', 'int'])
 
             aligned_df = pd.merge(query_df, compare_df, on='m/z', how = 'outer') #OUTER MERGE
@@ -442,7 +445,7 @@ def optimized_score(scored_matrix):
     row_lt = (diff_mat <= 0).astype(np.float) #rows less than
     col_lt = (diff_mat > 0).astype(np.float) #cols less than
     threshold = 0.25
-    thresh_mat = threshold*(row_lt*row_mat + col_lt*col_mat) #min of col and row, 10% is threshold
+    thresh_mat = threshold*(row_lt*row_mat + col_lt*col_mat) #min of col and row, 25% is threshold
 
     min_ce_diff_mask_thresh = matrix[:,:,0] <= thresh_mat
     min_ce_diff_mask = min_ce_diff_mask_entries & min_ce_diff_mask_thresh
