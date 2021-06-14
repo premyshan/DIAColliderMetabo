@@ -63,83 +63,47 @@ Filter the compound list based on the inchikey to take out chiral isomers but ke
 input: Original list of compounds 
 output: Filtered compound list
 """
-def filter_comp(
-        compounds, spectra, 
-        col_energy = 35, 
-        col_gas = 'N2', 
-        ion_mode = 'P',
-        inst_type = ['Q-TOF', 'HCD'], 
-        adduct = ['[M+H]+', '[M+Na]+'],
-        min_num_trans = 0,
-        share_mol_ids = False):
+def filter_comp(compounds_filt, spectra, col_energy = 35, col_gas = 'N2', ion_mode = 'P',inst_type = ['Q-TOF', 'HCD'], adduct = ['[M+H]+', '[M+Na]+']):
+    compounds_filt['inchikey'] = compounds_filt['inchikey'].str[:14]
 
-    compounds['inchikey_s'] = compounds['inchikey'].str[:14]
-
-    compounds_filt = compounds.drop_duplicates(subset='inchikey_s', keep=False)
-    spectra_filt = spectra.loc[spectra['mol_id'].isin(compounds_filt.mol_id)]
+    compounds_filt = compounds_filt.drop_duplicates(subset='inchikey', keep=False)
+    spectra_filt_all = spectra.loc[spectra['mol_id'].isin(compounds_filt.mol_id)]
 
     if ion_mode != '':
-        spectra_filt = spectra_filt.loc[spectra_filt['ion_mode'] == str(ion_mode)]
+        spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['ion_mode'] == str(ion_mode)]
 
-    spectra_filt = spectra_filt.loc[spectra_filt['res']>=2]
+    spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['res']>=2]
 
     if inst_type != '':
         inst_type = [str(x) for x in inst_type]
-        spectra_filt = spectra_filt.loc[spectra_filt['inst_type'].isin(inst_type)]
+        spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['inst_type'].isin(inst_type)]
 
-    spectra_filt.loc[:,'col_energy'] = spectra_filt['col_energy'].apply(lambda x: str(x).split('%')[-1])
-    spectra_filt = spectra_filt.loc[spectra_filt['col_energy'] != ""]
-    spectra_filt.loc[:,'col_energy'] = spectra_filt['col_energy'].replace(regex=True,to_replace='[^0-9.]',value=r'')
-    spectra_filt.loc[:,'col_energy'] = spectra_filt['col_energy'].astype(float)
+    spectra_filt_all['col_energy'] = spectra_filt_all['col_energy'].apply(lambda x: str(x).split('%')[-1])
+    spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy']!=""]
+    spectra_filt_all['col_energy'].replace(regex=True,inplace=True,to_replace='[^0-9.]',value=r'')
+    spectra_filt_all.loc[:,'col_energy'] = spectra_filt_all['col_energy'].astype(float)
 
     if col_energy != 0:
         low = int(col_energy)-5
         high = int(col_energy)+5
-        spectra_filt = spectra_filt.loc[spectra_filt['col_energy'].between(low, high, inclusive = True)]
+        spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy'].between(low, high, inclusive = True)]
 
     if col_gas != '':
-        spectra_filt = spectra_filt.loc[spectra_filt['col_gas'] == str(col_gas)]
+        spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_gas'] == str(col_gas)]
 
-    spectra_filt.loc[:,'peaks'] = spectra_filt['peaks'].apply(lambda x: [(a,b/(max(x,key=itemgetter(1))[1])) for (a,b) in x])
-
-    spectra_filt = spectra_filt.loc[spectra_filt['spec_type'] == 'MS2']
-    spectra_filt.loc[:,'prec_mz'] = spectra_filt['prec_mz'].astype(float)
+    spectra_filt_all.loc[:,'peaks'] = spectra_filt_all['peaks'].apply(lambda x: [(a,b/(max(x,key=itemgetter(1))[1])) for (a,b) in x])
+    spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['spec_type'] == 'MS2']
+    spectra_filt_all.loc[:,'prec_mz'] = spectra_filt_all['prec_mz'].astype(float)
     
     if adduct != []:
         adduct = [str(x) for x in adduct]
-        add_mol_id = spectra_filt.loc[spectra_filt['prec_type'].isin(adduct)]["mol_id"]
-        compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(add_mol_id)]
+        spectra_filt_add = spectra_filt_all.loc[spectra_filt_all['prec_type'].isin(adduct)]
+    else:
+        spectra_filt_add = spectra_filt_all
+       
+    compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt_add.mol_id)]
 
-    if min_num_trans > 0:
-        # this adds mzs and ints column to the spectra
-        def get_mzs(peaks):
-            mzs = [my_round(mz) for mz in list(zip(*peaks))[0]]
-            return mzs
-        def get_ints(peaks):
-            ints = list(zip(*peaks))[1]
-            return ints
-        spectra_filt["mzs"] = spectra_filt["prec_mz"].apply(get_mzs) 
-        spectra_filt["ints"] = spectra_filt["prec_mz"].apply(get_ints)
-        def compute_num_trans(row):
-            prec_mz = my_round(row["prec_mz"])
-            mzs = row["mzs"]
-            same_count = sum(mz == prec_mz for mz in mzs)
-            return len(mzs) - same_count
-        spectra_filt['num_trans'] = spectra_filt.apply(compute_num_trans)
-        spectra_filt = spectra_filt.loc[spectra_filt['num_trans'] >= 3]
-        spectra_filt = spectra_filt[spectra_filt['mol_id'].map(spectra_filt['mol_id'].value_counts()) > 1]
-
-    if share_mol_ids:
-        # filter dfs for mol_ids that are in both
-        both_ids = list(set(compounds_filt['mol_id']) & set(spectra_filt['mol_id']))
-        compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(both_ids)]
-        spectra_filt = spectra_filt.loc[spectra_filt['mol_id'].isin(both_ids)]
-
-    # reset index
-    compounds_filt = compounds_filt.reset_index(drop=True)
-    spectra_filt = spectra_filt.reset_index(drop=True)
-
-    return compounds_filt, spectra_filt
+    return compounds_filt, spectra_filt_all
 
 """
 function choose_background_and_query:
@@ -164,6 +128,7 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
         adduct = [str(x) for x in adduct]
         query_opt = query_opt.loc[query_opt['prec_type'].isin(adduct)]
 
+    query_opt = query_opt.reset_index(drop=True)
     same = spectra_filt.loc[spectra_filt['mol_id']==mol_id]
     background_filt = spectra_filt.drop(same.index) #drop spectra from same mol_id
     
@@ -325,25 +290,25 @@ def method_profiler(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3
     print("Time to completion of profiler: " + str(end-start))    
     return profiled
 
-    # allcomp, spectra = read(compounds = 'comp_df17.pkl', spectra = 'spec_df17.pkl')
-    # compounds_filt, spectra_filt = filter_comp(compounds_filt = allcomp, spectra=spectra, inst_type=['Q-TOF'], col_energy=0, ion_mode='P', adduct=['[M+H]+'])
-
-
-#CE Optimization
-#filter_comp --> filters the data based on instrument type, pos ion mode and adduct (just M+H)
-#choose_back_and_query --> chooses the interferring compounds for the query based on the given conditions
+def optimal_ce_filter(compounds_filt, spectra_filt, adduct='[M+H]+'):
+    spectra_filt = spectra_filt.loc[spectra_filt['prec_type']== adduct]
+    trans = []
+    for i, row in spectra_filt.iterrows():
+        query_prec_mz = row['prec_mz']
+        f2 = my_round(query_prec_mz)
+        query_frag_mz =  list(row['peaks'])
+        query_frag_mz.sort(key = lambda x: x[1], reverse = True)
+        f1 = [(my_round(a),b) for (a,b) in query_frag_mz]
+        f1 = [(a,b) for (a,b) in f1 if a==f2]
+        trans.append(row['num_peaks']-len(f1))
+    spectra_filt['trans']=trans
+    spectra_filt= spectra_filt.loc[spectra_filt['trans']>=3]
+    compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt.mol_id)]
+    return compounds_filt, spectra_filt
 
 def collision_energy_optimizer(compounds, spectra):
-    
-    compounds_filt, spectra_filt = filter_comp(
-        compounds, spectra,
-        inst_type=["Q-TOF","HCD"],
-        col_energy=0,
-        ion_mode="P",
-        adduct=["[M+H]+"],
-        min_num_trans=1,
-        share_mol_ids=True)
 
+    # quick check that spectra mz are bounded
     max_mz = spectra_filt["mzs"].apply(max).max()
     assert max_mz < 2000., max_mz
 
@@ -371,10 +336,15 @@ def collision_energy_optimizer(compounds, spectra):
     spec_id2idx = {spec_id:spec_idx for spec_idx,spec_id in enumerate(spectra_filt["spec_id"].tolist())}
 
     collision_energy = []
-    isotope_num = []
-    numcomp = []
+    num_spectra = []
+    num_comp = []
     collision_all = []
-    mz = []
+    mz=[]
+    spectra_filt = spectra_filt[spectra_filt['mol_id'].map(spectra_filt['mol_id'].value_counts()) > 1]
+    compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt.mol_id)]
+    # reset index for magic
+    spectra_filt = spectra_filt.drop_index(keep=False)
+    compounds_filt = compounds_filt.drop_index(keep=False)
 
     # parallelize this with multiprocessing
     for i, molecule in compounds_filt.iterrows(): #find optimal CE for each compound
@@ -389,14 +359,14 @@ def collision_energy_optimizer(compounds, spectra):
         background_spec_idx = background["spec_id"].map(spec_id2idx).to_numpy()
 
         mz.append(query['prec_mz'].reset_index(drop=True).iloc[0].item())
-        isotope_num.append(len(background['mol_id']))
+        num_spectra.append(len(background['mol_id']))
         min_ces = []
-        numcomp2 = 0 
+        num_comp2 = 0
             
         if len(background) >= 1: #if theres is an intef
 
             background_id = list(set(background['mol_id']))
-            numcomp2 = len(background_id) #NUMBER OF ISOTOPES
+            num_comp = len(background_id)
 
             score_mat = both_mat[query_spec_idx][:,background_spec_idx]
             assert not score_mat.size == 0
@@ -405,7 +375,7 @@ def collision_energy_optimizer(compounds, spectra):
             # min_ces can be an empty list
             min_ces = compute_optimal_ces(score_mat,ces_row,ces_col)
                        
-        numcomp.append(numcomp2)
+        num_comp.append(num_comp2)
         collision_all.append(min_ces)
         collision_opt = (list(itertools.chain.from_iterable(collision_opt)))
         
@@ -419,8 +389,8 @@ def collision_energy_optimizer(compounds, spectra):
     # not sure if we need this copy here
     compounds_filt['AllCE'] = collision_all
     compounds_filt['Optimal Collision Energy'] = collision_energy
-    compounds_filt['Isotopes'] = isotope_num
-    compounds_filt['NumComp'] = numcomp
+    compounds_filt['NumSpectra'] = num_spectra
+    compounds_filt['NumComp'] = num_comp
     compounds_filt['m/z'] = mz
     return compounds_filt
 
@@ -442,7 +412,7 @@ def compute_optimal_ces(matrix,ces_row,ces_col):
     row_lt = (diff_mat <= 0).astype(np.float) #rows less than
     col_lt = (diff_mat > 0).astype(np.float) #cols less than
     threshold = 0.25
-    thresh_mat = threshold*(row_lt*row_mat + col_lt*col_mat) #min of col and row, 10% is threshold
+    thresh_mat = threshold*(row_lt*row_mat + col_lt*col_mat) #min of col and row, 25% is threshold
 
     min_ce_diff_mask_thresh = matrix[:,:,0] <= thresh_mat
     min_ce_diff_mask = min_ce_diff_mask_entries & min_ce_diff_mask_thresh
