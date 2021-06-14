@@ -40,20 +40,20 @@ function read:
 input: a list of compounds, a list of spectra
 output: pandas dataframes (allcomp and spectra)
 """
-def read(compounds_fp, spectra_fp):
-    compounds = pd.read_pickle(compounds_fp) 
-    compounds = compounds.dropna(subset = ['mol_id'])
-    compounds = compounds.loc[compounds.sanitize==True]
-    compounds.loc[:,"mol_id"] = compounds.mol_id.astype(int)
-    spectra = pd.read_pickle(spectra_fp)
+def read(compounds, spectra):
+    allcomp = pd.read_pickle(compounds) 
+    allcomp = allcomp.dropna(subset = ['mol_id'])
+    allcomp = allcomp.loc[allcomp.sanitize==True]
+    allcomp.loc[:,"mol_id"] = allcomp.mol_id.astype(int)
+    spectra = pd.read_pickle(spectra)
     spectra = spectra.dropna(subset = ['mol_id'])
     spectra.loc[:,"mol_id"] = spectra.mol_id.astype(int)
 
-    assert not compounds["inchi"].isna().any()
-    assert not compounds["inchikey"].isna().any()
-    spectra = spectra.loc[spectra['mol_id'].isin(compounds.mol_id)]
-
-    return compounds, spectra
+    cf = allcomp
+    assert not cf["inchi"].isna().any()
+    assert not cf["inchikey"].isna().any()
+    spectra = spectra.loc[spectra['mol_id'].isin(cf.mol_id)]
+    return cf, spectra
 
 """
 function filter:
