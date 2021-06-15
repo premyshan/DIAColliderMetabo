@@ -27,9 +27,10 @@ import itertools
 import time
 import math
 from math import sqrt
-from statistics import mode, mean
+from scipy.stats import mode 
 from operator import itemgetter
 from collections import Counter
+from tqdm import tqdm
 
 def my_round(val, decimal=2):
     multiplier = 10**decimal
@@ -127,10 +128,11 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
     if adduct != []:
         adduct = [str(x) for x in adduct]
         query_opt = query_opt.loc[query_opt['prec_type'].isin(adduct)]
+        # note: it is possible for query_opt to have 0 elements here!
 
     query_opt = query_opt.reset_index(drop=True)
     same = spectra_filt.loc[spectra_filt['mol_id']==mol_id]
-    background_filt = spectra_filt.drop(same.index) #drop spectra from same mol_id
+    background_filt = spectra_filt.drop(index=same.index) #drop spectra from same mol_id
     
     if (choose==True) and (len(query_opt)!=0):
         if len(query_opt)>1:
@@ -290,143 +292,157 @@ def method_profiler(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3
     print("Time to completion of profiler: " + str(end-start))    
     return profiled
 
-def optimal_ce_filter(compounds_filt, spectra_filt, adduct='[M+H]+'):
-    spectra_filt = spectra_filt.loc[spectra_filt['prec_type']== adduct]
-    trans = []
-    for i, row in spectra_filt.iterrows():
-        query_prec_mz = row['prec_mz']
-        f2 = my_round(query_prec_mz)
-        query_frag_mz =  list(row['peaks'])
-        query_frag_mz.sort(key = lambda x: x[1], reverse = True)
-        f1 = [(my_round(a),b) for (a,b) in query_frag_mz]
-        f1 = [(a,b) for (a,b) in f1 if a==f2]
-        trans.append(row['num_peaks']-len(f1))
-    spectra_filt['trans']=trans
-    spectra_filt= spectra_filt.loc[spectra_filt['trans']>=3]
+def optimal_ce_filter(compounds_filt, spectra_filt, adduct):
+    
+    spectra_filt = spectra_filt[spectra_filt["prec_type"] == adduct].reset_index(drop=True)
+    # this adds mzs and ints column to the spectra
+    def get_mzs(peaks):
+        mzs = [my_round(mz) for mz in list(zip(*peaks))[0]]
+        return mzs
+    def get_ints(peaks):
+        ints = list(zip(*peaks))[1]
+        return ints
+    spectra_filt.loc[:,"mzs"] = spectra_filt["peaks"].apply(get_mzs) 
+    spectra_filt.loc[:,"ints"] = spectra_filt["peaks"].apply(get_ints)
+    def compute_num_trans(row):
+        prec_mz = my_round(row["prec_mz"])
+        mzs = row["mzs"]
+        same_count = np.sum(mz == prec_mz for mz in mzs)
+        return len(mzs) - same_count
+    spectra_filt['num_trans'] = spectra_filt.apply(compute_num_trans,axis=1)
+    spectra_filt = spectra_filt.loc[spectra_filt['num_trans'] >= 3]
+    spectra_filt = spectra_filt[spectra_filt['mol_id'].map(spectra_filt['mol_id'].value_counts()) > 1]
     compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt.mol_id)]
     return compounds_filt, spectra_filt
 
-def collision_energy_optimizer(compounds, spectra):
+def collision_energy_optimizer(compounds_filt, spectra_filt):
 
     # quick check that spectra mz are bounded
     max_mz = spectra_filt["mzs"].apply(max).max()
     assert max_mz < 2000., max_mz
 
     def compute_spec(row, mz_max=2000., mz_res=1.0):
-        mzs = row["mzs"]
-        ints = row["ints"]
+        mzs = np.array(row["mzs"])
+        ints = 100*np.array(row["ints"])
         mz_bins = np.arange(0.,mz_max+mz_res,step=mz_res)
         mz_bin_idxs = np.digitize(mzs,bins=mz_bins,right=True)
         spec = np.zeros([len(mz_bins)],dtype=float)
         for i in range(len(mz_bin_idxs)):
-            spec[mz_bin_idxs[i]] += 100*ints[i]
-        assert np.sum(spec) == np.sum(ints)
+            spec[mz_bin_idxs[i]] += ints[i]
+        assert np.isclose(np.sum(spec),np.sum(ints)), np.abs(np.sum(spec)-np.sum(ints))
         return spec
 
     # compute ce diff matrix
     ce_vec = spectra_filt["col_energy"].to_numpy().reshape(-1,1)
-    ce_mat = np.abs(ce_arr - ce_arr.T)
+    query_mat =  np.broadcast_to(ce_vec,[ce_vec.shape[0],ce_vec.shape[0]])
+    background_mat = np.broadcast_to(ce_vec.T,[ce_vec.shape[0],ce_vec.shape[0]])
+    ce_diff_mat = query_mat - background_mat
     # compute cosine sim matrix
-    spec_vec = spectra_filt.apply(compute_spec)
+    spec = spectra_filt.apply(compute_spec,axis=1)
+    spec_vec = np.stack(spec.tolist(),axis=0).reshape(spec.shape[0],-1)
     cos_vec = spec_vec / np.sqrt(np.sum(spec_vec**2,axis=1)).reshape(-1,1)
-    cos_mat = np.matmul(cos_vec,cos_vec.T)
-    # stack them
-    both_mat = np.stack([ce_mat,cos_mat],axis=-1)
+    cos_sim_mat = np.matmul(cos_vec,cos_vec.T)
+    # 
+    all_mat = np.stack([query_mat,background_mat,ce_diff_mat,cos_sim_mat],axis=-1)
     # get mapping from spectrum id to idx of the matrix
-    spec_id2idx = {spec_id:spec_idx for spec_idx,spec_id in enumerate(spectra_filt["spec_id"].tolist())}
+    spec_id2idx = {spec_id:spec_idx for spec_idx,spec_id in enumerate(spectra_filt["spectrum_id"].tolist())}
 
-    collision_energy = []
+    mode_min_ces = []
     num_spectra = []
-    num_comp = []
-    collision_all = []
-    mz=[]
+    num_comps = []
+    all_min_ces = []
+    prec_mzs = []
     spectra_filt = spectra_filt[spectra_filt['mol_id'].map(spectra_filt['mol_id'].value_counts()) > 1]
     compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt.mol_id)]
     # reset index for magic
-    spectra_filt = spectra_filt.drop_index(keep=False)
-    compounds_filt = compounds_filt.drop_index(keep=False)
+    spectra_filt = spectra_filt.reset_index(drop=False)
+    compounds_filt = compounds_filt.reset_index(drop=False)
 
-    # parallelize this with multiprocessing
-    for i, molecule in compounds_filt.iterrows(): #find optimal CE for each compound
-        molidp = molecule['mol_id']
+    # find optimal CE for each compound
+    for i, mol_id in tqdm(compounds_filt["mol_id"].iteritems(),desc="> optimal_ce",total=compounds_filt.shape[0]):
         query, background, _, _, _  = choose_background_and_query(
-            mol_id = molidp, col_energy = 0, change=25, 
+            mol_id = mol_id, col_energy = 0, change=25, 
             q3 = False, spectra_filt = spectra_filt.copy(),
             choose=False, top_n=0, adduct=['[M+H]+']
         )
+        if query.shape[0] == 0:
+            # this happens when the mol_id only corresponds to adducts that are not "[M+H]+"
+            import pdb; pdb.set_trace()
 
-        query_spec_idx = query["spec_id"].map(spec_id2idx).to_numpy()
-        background_spec_idx = background["spec_id"].map(spec_id2idx).to_numpy()
+        query_spec_idx = query["spectrum_id"].map(spec_id2idx).to_numpy()
+        background_spec_idx = background["spectrum_id"].map(spec_id2idx).to_numpy()
 
-        mz.append(query['prec_mz'].reset_index(drop=True).iloc[0].item())
+        prec_mzs.append(query['prec_mz'].reset_index(drop=True).iloc[0].item())
         num_spectra.append(len(background['mol_id']))
-        min_ces = []
-        num_comp2 = 0
+        cur_num_comp, cur_min_ces = 0, []
             
         if len(background) >= 1: #if theres is an intef
 
             background_id = list(set(background['mol_id']))
-            num_comp = len(background_id)
+            cur_num_comp = len(background_id)
 
-            score_mat = both_mat[query_spec_idx][:,background_spec_idx]
+            score_mat = all_mat[query_spec_idx][:,background_spec_idx]
             assert not score_mat.size == 0
-            ces_row = ce_vec[query_spec_idx]
-            ces_col = ce_vec[background_spec_idx]
-            # min_ces can be an empty list
-            min_ces = compute_optimal_ces(score_mat,ces_row,ces_col)
+            # all_min_ces can be an empty list
+            cur_min_ces = compute_optimal_ces(score_mat)
                        
-        num_comp.append(num_comp2)
-        collision_all.append(min_ces)
-        collision_opt = (list(itertools.chain.from_iterable(collision_opt)))
-        
-        if len(min_ces) == 0:
-            collision_energy.append(-1)
-        elif len(min_ces) == 1:
-            collision_energy.append(min_ces[0])
-        else:          
-            collision_energy.append(mode(min_ces))
-    
-    # not sure if we need this copy here
-    compounds_filt['AllCE'] = collision_all
-    compounds_filt['Optimal Collision Energy'] = collision_energy
+        all_min_ces.append(cur_min_ces)
+        num_comps.append(cur_num_comp)
+
+        if len(cur_min_ces) == 0:
+            mode_min_ces.append(-1.)
+        elif len(cur_min_ces) == 1:
+            mode_min_ces.append(float(cur_min_ces[0]))
+        else:
+            mode_min_ces.append(float(mode(cur_min_ces)[0]))
+
+    compounds_filt['AllCE'] = all_min_ces
+    compounds_filt['Optimal Collision Energy'] = mode_min_ces
     compounds_filt['NumSpectra'] = num_spectra
-    compounds_filt['NumComp'] = num_comp
-    compounds_filt['m/z'] = mz
+    compounds_filt['NumComp'] = num_comps
+    compounds_filt['m/z'] = prec_mzs
     return compounds_filt
 
-def compute_optimal_ces(matrix,ces_row,ces_col):
+def compute_optimal_ces(score_mat):
     
-    min_ce_diff_row = np.min(matrix[:,:,0], axis=1)
-    min_ce_diff_mask_row = matrix[:,:,0].T == min_ce_diff_row 
+    # this is absolute difference
+    row_mat = score_mat[:,:,0]
+    col_mat = score_mat[:,:,1]
+    ce_diff_mat = score_mat[:,:,2]
+    cos_sim_mat = score_mat[:,:,3]
+    # np.set_printoptions(suppress=True)
+    # print(row_mat)
+    # print(col_mat)
+    # print(ce_diff_mat)
+    # print(cos_sim_mat)
+    ce_abs_diff_mat = np.abs(ce_diff_mat)
 
-    min_ce_diff_col = np.min(matrix[:,:,0], axis=0)
-    min_ce_diff_mask_col = matrix[:,:,0] == min_ce_diff_col 
+    min_ce_diff_row = np.min(ce_abs_diff_mat, axis=1)
+    min_ce_diff_mask_row = ce_diff_mat.T == min_ce_diff_row 
+
+    min_ce_diff_col = np.min(ce_abs_diff_mat, axis=0)
+    min_ce_diff_mask_col = ce_diff_mat == min_ce_diff_col 
 
     min_ce_diff_mask_entries = min_ce_diff_mask_row.T + min_ce_diff_mask_col
 
-    ces_row = ces_row.reshape(1,-1)
-    ces_col = ces_col.reshape(1,-1)
-    row_mat = np.broadcast_to(ces_row.T,[ces_row.T.shape[0],ces_col.shape[0]])
-    col_mat = np.broadcast_to(ces_col,[ces_row.shape[0],ces_col.T.shape[0]])
-    diff_mat = row_mat - col_mat
-    row_lt = (diff_mat <= 0).astype(np.float) #rows less than
-    col_lt = (diff_mat > 0).astype(np.float) #cols less than
+    row_lt = (ce_diff_mat <= 0).astype(np.float) #rows less than
+    col_lt = (ce_diff_mat > 0).astype(np.float) #cols less than
     threshold = 0.25
-    thresh_mat = threshold*(row_lt*row_mat + col_lt*col_mat) #min of col and row, 25% is threshold
+    thresh_mat = threshold * (row_lt*row_mat + col_lt*col_mat) #min of col and row, 25% is threshold
 
-    min_ce_diff_mask_thresh = matrix[:,:,0] <= thresh_mat
+    min_ce_diff_mask_thresh = ce_abs_diff_mat <= thresh_mat
     min_ce_diff_mask = min_ce_diff_mask_entries & min_ce_diff_mask_thresh
     fails_thresh = not np.any(min_ce_diff_mask)
 
     if fails_thresh:
-        min_ces = [] #drop if fails threshold
+        min_row_ces = []
     else:
-        min_score = np.min(matrix[:,:,1][min_ce_diff_mask]) 
-        min_score_mask = matrix[:,:,1] == min_score 
-        both_mask = min_ce_diff_mask & min_score_mask 
-        # argmin_row, argmin_col = np.nonzero(both_mask)
-        argmin_row = np.max(both_mask,axis=1) 
+        min_cos_sim = np.min(cos_sim_mat[min_ce_diff_mask]) 
+        min_cos_sim_mask = cos_sim_mat == min_cos_sim 
+        both_mask = min_ce_diff_mask & min_cos_sim_mask 
+        argmin_row_mask = np.max(both_mask,axis=1) 
         # these are the query CEs that achieve minimum (1 or more)
-        min_ces_row = ces_row_list[argmin_row]
-        min_ces = min_ces_row.tolist()
-    return min_ces
+        min_row_ces = row_mat[:,0][argmin_row_mask].tolist()
+    # print(min_row_ces)
+    # import sys; sys.exit(0)
+    return min_row_ces
