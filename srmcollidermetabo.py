@@ -313,6 +313,8 @@ def optimal_ce_filter(compounds_filt, spectra_filt, adduct):
     spectra_filt = spectra_filt.loc[spectra_filt['num_trans'] >= 3]
     spectra_filt = spectra_filt[spectra_filt['mol_id'].map(spectra_filt['mol_id'].value_counts()) > 1]
     compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt.mol_id)]
+    spectra_filt = spectra_filt.reset_index(drop=True)
+    compounds_filt = compounds_filt.reset_index(drop=True)
     return compounds_filt, spectra_filt
 
 def collision_energy_optimizer(compounds_filt, spectra_filt):
@@ -342,7 +344,6 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     spec_vec = np.stack(spec.tolist(),axis=0).reshape(spec.shape[0],-1)
     cos_vec = spec_vec / np.sqrt(np.sum(spec_vec**2,axis=1)).reshape(-1,1)
     cos_sim_mat = np.matmul(cos_vec,cos_vec.T)
-    # 
     all_mat = np.stack([query_mat,background_mat,ce_diff_mat,cos_sim_mat],axis=-1)
     # get mapping from spectrum id to idx of the matrix
     spec_id2idx = {spec_id:spec_idx for spec_idx,spec_id in enumerate(spectra_filt["spectrum_id"].tolist())}
@@ -351,12 +352,7 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     num_spectra = []
     num_comps = []
     all_min_ces = []
-    prec_mzs = []
-    spectra_filt = spectra_filt[spectra_filt['mol_id'].map(spectra_filt['mol_id'].value_counts()) > 1]
-    compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt.mol_id)]
-    # reset index for magic
-    spectra_filt = spectra_filt.reset_index(drop=False)
-    compounds_filt = compounds_filt.reset_index(drop=False)
+    prec_mzs = []    
 
     # find optimal CE for each compound
     for i, mol_id in tqdm(compounds_filt["mol_id"].iteritems(),desc="> optimal_ce",total=compounds_filt.shape[0]):
