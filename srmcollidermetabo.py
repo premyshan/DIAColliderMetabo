@@ -83,6 +83,7 @@ def filter_comp(compounds_filt, spectra, col_energy = 35, col_gas = 'N2', ion_mo
     spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy']!=""]
     spectra_filt_all['col_energy'].replace(regex=True,inplace=True,to_replace='[^0-9.]',value=r'')
     spectra_filt_all.loc[:,'col_energy'] = spectra_filt_all['col_energy'].astype(float)
+    spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy']!=0.]
 
     if col_energy != 0:
         low = int(col_energy)-5
@@ -344,19 +345,19 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     spec_vec = np.stack(spec.tolist(),axis=0).reshape(spec.shape[0],-1)
     cos_vec = spec_vec / np.sqrt(np.sum(spec_vec**2,axis=1)).reshape(-1,1)
     cos_sim_mat = np.matmul(cos_vec,cos_vec.T)
+    # stack them all
     all_mat = np.stack([query_mat,background_mat,ce_diff_mat,cos_sim_mat],axis=-1)
     # get mapping from spectrum id to idx of the matrix
     spec_id2idx = {spec_id:spec_idx for spec_idx,spec_id in enumerate(spectra_filt["spectrum_id"].tolist())}
 
-    mode_min_ces = []
     num_spectra = []
     num_comps = []
     all_min_ces = []
     prec_mzs = []
-    unique_optima = []
 
     # find optimal CE for each compound
     for i, mol_id in tqdm(compounds_filt["mol_id"].iteritems(),desc="> optimal_ce",total=compounds_filt.shape[0]):
+        
         query, background, _, _, _  = choose_background_and_query(
             mol_id = mol_id, col_energy = 0, change=25, 
             q3 = False, spectra_filt = spectra_filt.copy(),
@@ -367,41 +368,25 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
             import pdb; pdb.set_trace()
 
         query_spec_idx = query["spectrum_id"].map(spec_id2idx).to_numpy()
-        background_spec_idx = background["spectrum_id"].map(spec_id2idx).to_numpy()
+        background["spec_idx"] = background["spectrum_id"].map(spec_id2idx)
+        bg_mol_ids = background["mol_id"].unique().tolist()
+        
+        num_comps.append(len(bg_mol_ids))
+        prec_mzs.append(query["prec_mz"].tolist()[0])
+        num_spectra.append(background['spectrum_id'].nunique())
 
-        prec_mzs.append(query['prec_mz'].reset_index(drop=True).iloc[0].item())
-        num_spectra.append(len(background['mol_id']))
-        cur_num_comp, cur_min_ces = 0, []
-            
-        if len(background) >= 1: #if theres is an intef
-
-            background_id = list(set(background['mol_id']))
-            cur_num_comp = len(background_id)
-
+        cur_min_ces = []
+        for bg_mol_id in bg_mol_ids:    
+            background_spec_idx = background[background["mol_id"] == bg_mol_id]["spec_idx"].to_numpy()
             score_mat = all_mat[query_spec_idx][:,background_spec_idx]
             assert not score_mat.size == 0
-            # all_min_ces can be an empty list
-            cur_min_ces = compute_optimal_ces(score_mat)
-                       
+            cur_min_ces.append(compute_optimal_ces(score_mat))
         all_min_ces.append(cur_min_ces)
-        num_comps.append(cur_num_comp)
-
-        if len(cur_min_ces) == 0:
-            mode_min_ces.append(-1.)
-            unique_optima.append(False)
-        elif len(cur_min_ces) == 1:
-            mode_min_ces.append(float(cur_min_ces[0]))
-            unique_optima.append(True)
-        else:
-            mode_min_ces.append(float(mode(cur_min_ces)[0]))
-            unique_optima.append(False)
 
     compounds_filt['AllCE'] = all_min_ces
-    compounds_filt['Optimal Collision Energy'] = mode_min_ces
     compounds_filt['NumSpectra'] = num_spectra
     compounds_filt['NumComp'] = num_comps
     compounds_filt['m/z'] = prec_mzs
-    compounds_filt["unique_optima"] = unique_optima
     return compounds_filt
 
 def compute_optimal_ces(score_mat):
@@ -411,11 +396,6 @@ def compute_optimal_ces(score_mat):
     col_mat = score_mat[:,:,1]
     ce_diff_mat = score_mat[:,:,2]
     cos_sim_mat = score_mat[:,:,3]
-    # np.set_printoptions(suppress=True)
-    # print(row_mat)
-    # print(col_mat)
-    # print(ce_diff_mat)
-    # print(cos_sim_mat)
     ce_abs_diff_mat = np.abs(ce_diff_mat)
 
     min_ce_diff_row = np.min(ce_abs_diff_mat, axis=1)
