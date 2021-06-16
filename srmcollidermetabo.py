@@ -352,7 +352,8 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     num_spectra = []
     num_comps = []
     all_min_ces = []
-    prec_mzs = []    
+    prec_mzs = []
+    unique_optima = []
 
     # find optimal CE for each compound
     for i, mol_id in tqdm(compounds_filt["mol_id"].iteritems(),desc="> optimal_ce",total=compounds_filt.shape[0]):
@@ -387,16 +388,20 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
 
         if len(cur_min_ces) == 0:
             mode_min_ces.append(-1.)
+            unique_optima.append(False)
         elif len(cur_min_ces) == 1:
             mode_min_ces.append(float(cur_min_ces[0]))
+            unique_optima.append(True)
         else:
             mode_min_ces.append(float(mode(cur_min_ces)[0]))
+            unique_optima.append(False)
 
     compounds_filt['AllCE'] = all_min_ces
     compounds_filt['Optimal Collision Energy'] = mode_min_ces
     compounds_filt['NumSpectra'] = num_spectra
     compounds_filt['NumComp'] = num_comps
     compounds_filt['m/z'] = prec_mzs
+    compounds_filt["unique_optima"] = unique_optima
     return compounds_filt
 
 def compute_optimal_ces(score_mat):
