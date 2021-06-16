@@ -81,6 +81,7 @@ def filter_comp(compounds_filt, spectra, col_energy = 35, col_gas = 'N2', ion_mo
     spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy']!=""]
     spectra_filt_all['col_energy'].replace(regex=True,inplace=True,to_replace='[^0-9.]',value=r'')
     spectra_filt_all.loc[:,'col_energy'] = spectra_filt_all['col_energy'].astype(float)
+    spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy']!=0.0]
 
     if col_energy != 0:
         low = int(col_energy)-5
