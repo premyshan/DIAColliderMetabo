@@ -435,18 +435,22 @@ def compute_optimal_ces(score_mat):
 
 def test_optimal_ce_1():
 
-    query_mat = np.array([
-        [1,1,1,1,1,1],
-        [3,3,3,3,3,3],
-        [5,5,5,5,5,5],
-        [7,7,7,7,7,7]
-    ],dtype=float)
-    background_mat = np.array([
-        [1,2,4,6,7,10],
-        [1,2,4,6,7,10],
-        [1,2,4,6,7,10],
-        [1,2,4,6,7,10]
-    ],dtype=float) 
+    query_ce = np.array([1.,3.,5.,7.]).reshape(-1,1)
+    bg_ce = np.array([1.,2.,4.,6.,7.,10.]).reshape(1,-1)
+    query_mat = np.broadcast_to(query_ce,[query_ce.shape[0],bg_ce.shape[1]])
+    background_mat = np.broadcast_to(bg_ce,[query_ce.shape[0],bg_ce.shape[1]])
+    # query_mat = np.array([
+    #     [1,1,1,1,1,1],
+    #     [3,3,3,3,3,3],
+    #     [5,5,5,5,5,5],
+    #     [7,7,7,7,7,7]
+    # ],dtype=float)
+    # background_mat = np.array([
+    #     [1,2,4,6,7,10],
+    #     [1,2,4,6,7,10],
+    #     [1,2,4,6,7,10],
+    #     [1,2,4,6,7,10]
+    # ],dtype=float) 
     ce_diff_mat = query_mat - background_mat
     sim_mat = np.array([
         [.1,.3,.5,.2,.1,.1],
@@ -460,8 +464,44 @@ def test_optimal_ce_1():
     expected_minimal_ces = [1.,7.]
     computed_minimal_ces = compute_optimal_ces(score_mat)
     print(expected_minimal_ces,computed_minimal_ces)
-    assert set(expected_minimal_ces) == set(computed_minimal_ces)
+
+def test_optimal_ce_2():
+
+    query_ce = np.array([1.,3.,5.]).reshape(-1,1)
+    bg_ce = np.array([2.,4.,6.]).reshape(1,-1)
+    query_mat = np.broadcast_to(query_ce,[query_ce.shape[0],bg_ce.shape[1]])
+    background_mat = np.broadcast_to(bg_ce,[query_ce.shape[0],bg_ce.shape[1]])
+    ce_diff_mat = query_mat - background_mat
+    sim_mat = np.array([
+        [.1,.1,.1],
+        [.1,.1,.1],
+        [.1,.1,.1]
+    ])
+    score_mat = np.stack([query_mat,background_mat,ce_diff_mat,sim_mat],axis=-1)
+
+    expected_minimal_ces = [5.]
+    computed_minimal_ces = compute_optimal_ces(score_mat)
+    print(expected_minimal_ces,computed_minimal_ces)
+
+def test_optimal_ce_3():
+
+    query_ce = np.array([1.,3.]).reshape(-1,1)
+    bg_ce = np.array([8.,9.,11.]).reshape(1,-1)
+    query_mat = np.broadcast_to(query_ce,[query_ce.shape[0],bg_ce.shape[1]])
+    background_mat = np.broadcast_to(bg_ce,[query_ce.shape[0],bg_ce.shape[1]])
+    ce_diff_mat = query_mat - background_mat
+    sim_mat = np.array([
+        [.1,.2,.3],
+        [.1,.2,.3]
+    ])
+    score_mat = np.stack([query_mat,background_mat,ce_diff_mat,sim_mat],axis=-1)
+
+    expected_minimal_ces = []
+    computed_minimal_ces = compute_optimal_ces(score_mat)
+    print(expected_minimal_ces,computed_minimal_ces)
 
 if __name__ == "__main__":
 
     test_optimal_ce_1()
+    test_optimal_ce_2()
+    test_optimal_ce_3()
