@@ -16,17 +16,18 @@ from collections import Counter
 
 allcomp, spectra = read(compounds = 'comp_df17.pkl', spectra = 'spec_df17.pkl')
 compounds_filt, spectra_filt = filter_comp(compounds_filt = allcomp, spectra=spectra, inst_type=['Q-TOF', 'HCD'], col_energy=0, adduct=['[M+H]+'])
-compounds_filt, spectra_filt = optimal_ce_filter(compounds_filt=compounds_filt, spectra_filt=spectra_filt)
 
-qtof = spectra_filt.loc[spectra_filt['inst_type']=='Q-TOF']
-qtof = qtof[qtof['mol_id'].map(qtof['mol_id'].value_counts()) > 1] #can't do mol_id filter for all, since only one instrument will be taken
+qtof_spec = spectra_filt.loc[spectra_filt['inst_type']=='Q-TOF']
+qtof_comp = compounds_filt.loc[compounds_filt.mol_id.isin(qtof_spec.mol_id)]
+qtof_comp, qtof_spec = optimal_ce_filter(qtof_comp, qtof_spec, '[M+H]+')
 
-hcd = spectra_filt.loc[spectra_filt['inst_type']=='HCD']
-hcd = hcd[hcd['mol_id'].map(hcd['mol_id'].value_counts()) > 1]
+hcd_spec = spectra_filt.loc[spectra_filt['inst_type']=='HCD']
+hcd_comp = compounds_filt.loc[compounds_filt.mol_id.isin(hcd_spec.mol_id)]
+hcd_comp, hcd_spec = optimal_ce_filter(hcd_comp, hcd_spec, '[M+H]+')
 
-both = set(hcd['mol_id']).intersection(set(qtof['mol_id']))
+both = set(hcd_comp['mol_id']).intersection(set(qtof_comp['mol_id']))
 compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(both)]
-hcd = hcd.loc[hcd['mol_id'].isin(compounds_filt.mol_id)]
+hcd = hcd_spec.loc[hcd_spec['mol_id'].isin(compounds_filt.mol_id)]
 
 optimal_ce = collision_energy_optimizer(compounds_filt = compounds_filt, spectra_filt = hcd)
 optimal_ce.to_csv("ce_opt_609_hcdoverlap_25da.csv")
