@@ -19,7 +19,7 @@ fileid = sys.argv[1]
 allcomp, spectra = read(compounds = 'comp_df17.pkl', spectra = 'spec_df17.pkl')
 compounds_filt_all, spectra_filt_all = filter_comp(compounds_filt=allcomp, spectra=spectra)
 
-sizes = [1000,2000,3000,4000,5000,6000,7000]
+sizes = [1000,2000,3000,4000,5000,6000,7000,8000,9000]
 
 for size in sizes:
     #random subsample of queries
