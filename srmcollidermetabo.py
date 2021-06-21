@@ -324,11 +324,11 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     max_mz = spectra_filt["mzs"].apply(max).max()
     assert max_mz < 2000., max_mz
 
-    def compute_spec(row, mz_max=2000., mz_res=1.0):
+    def compute_spec(row, mz_max=2000.):
         mzs = np.array(row["mzs"])
         ints = 100*np.array(row["ints"])
-        mz_bins = np.arange(0.,mz_max+mz_res,step=mz_res)
-        mz_bin_idxs = np.digitize(mzs,bins=mz_bins,right=True)
+        mz_bins = np.arange(0.5,mz_max+0.5,step=1.0)
+        mz_bin_idxs = np.digitize(mzs,bins=mz_bins,right=False)
         spec = np.zeros([len(mz_bins)],dtype=float)
         for i in range(len(mz_bin_idxs)):
             spec[mz_bin_idxs[i]] += ints[i]
@@ -350,9 +350,13 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     # get mapping from spectrum id to idx of the matrix
     spec_id2idx = {spec_id:spec_idx for spec_idx,spec_id in enumerate(spectra_filt["spectrum_id"].tolist())}
 
+    # number of interfering spectra, per query
     num_spectra = []
+    # number of interfering compounds, per query
     num_comps = []
+    # the set of minimal CEs per interfering compound, per query
     all_min_ces = []
+    # the precursor mz of the query
     prec_mzs = []
 
     # find optimal CE for each compound
@@ -371,12 +375,14 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
         background["spec_idx"] = background["spectrum_id"].map(spec_id2idx)
         bg_mol_ids = background["mol_id"].unique().tolist()
         
+        assert query["prec_mz"].nunique() == 1, query.nunique()
+
         num_comps.append(len(bg_mol_ids))
         prec_mzs.append(query["prec_mz"].tolist()[0])
         num_spectra.append(background['spectrum_id'].nunique())
 
         cur_min_ces = []
-        for bg_mol_id in bg_mol_ids:    
+        for bg_mol_id in bg_mol_ids:  
             background_spec_idx = background[background["mol_id"] == bg_mol_id]["spec_idx"].to_numpy()
             score_mat = all_mat[query_spec_idx][:,background_spec_idx]
             assert not score_mat.size == 0
@@ -391,12 +397,11 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
 
 def compute_optimal_ces(score_mat):
     
-    # this is absolute difference
     row_mat = score_mat[:,:,0]
     col_mat = score_mat[:,:,1]
-    ce_diff_mat = score_mat[:,:,2]
+    ce_diff_mat = score_mat[:,:,2] # this is difference
     cos_sim_mat = score_mat[:,:,3]
-    ce_abs_diff_mat = np.abs(ce_diff_mat)
+    ce_abs_diff_mat = np.abs(ce_diff_mat) # this is absolute difference
 
     min_ce_diff_row = np.min(ce_abs_diff_mat, axis=1)
     min_ce_diff_mask_row = ce_diff_mat.T == min_ce_diff_row 
@@ -427,3 +432,36 @@ def compute_optimal_ces(score_mat):
     # print(min_row_ces)
     # import sys; sys.exit(0)
     return min_row_ces
+
+def test_optimal_ce_1():
+
+    query_mat = np.array([
+        [1,1,1,1,1,1],
+        [3,3,3,3,3,3],
+        [5,5,5,5,5,5],
+        [7,7,7,7,7,7]
+    ],dtype=float)
+    background_mat = np.array([
+        [1,2,4,6,7,10],
+        [1,2,4,6,7,10],
+        [1,2,4,6,7,10],
+        [1,2,4,6,7,10]
+    ],dtype=float) 
+    ce_diff_mat = query_mat - background_mat
+    sim_mat = np.array([
+        [.1,.3,.5,.2,.1,.1],
+        [.2,.1,.1,.1,.1,.1],
+        [.2,.1,.4,.1,.1,.1],
+        [.3,.3,.2,.3,.1,.1]
+    ])
+
+    score_mat = np.stack([query_mat,background_mat,ce_diff_mat,sim_mat],axis=-1)
+
+    expected_minimal_ces = [1.,7.]
+    computed_minimal_ces = compute_optimal_ces(score_mat)
+    print(expected_minimal_ces,computed_minimal_ces)
+    assert set(expected_minimal_ces) == set(computed_minimal_ces)
+
+if __name__ == "__main__":
+
+    test_optimal_ce_1()
