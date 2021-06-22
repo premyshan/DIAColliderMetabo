@@ -88,8 +88,8 @@ def filter_comp(compounds_filt, spectra, col_energy = 35, col_gas = 'N2', ion_mo
     spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy']!=0.0]
 
     if col_energy != 0:
-        low = int(col_energy)-5
-        high = int(col_energy)+5
+        low = col_energy-5
+        high = col_energy+5
         spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy'].between(low, high, inclusive = True)]
 
     if col_gas != '':
@@ -274,7 +274,7 @@ Input: parameters for choose_background_and_query
 Output: compounds list with added columns of 'USI1' and 'Average Interference'
 """
 
-def profile(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy=35, q3 = True, top_n = 0.1, mol_id = 0, uis_num=0):    
+def profile(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy=35, q3 = False, top_n = 0.1, mol_id = 0, uis_num=0):
     uis_all = []
     int_all = []
     trans_all = []
@@ -309,7 +309,7 @@ Input: parameters for choose_background_and_query (q3 stays False in this case, 
 Output: compounds list with added columns of 'UIS' and 'Average Interference'
 """
 
-def method_profiler(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy = 35, q3 = True, top_n = 0.1, mol_id = 0, uis_num = 0):
+def method_profiler(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy = 35, q3 = False, top_n = 0.1, mol_id = 0, uis_num = 0):
     start = time.time()
     profiled = profile(change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3, adduct = adduct, col_energy = col_energy,
                        q3 = q3, top_n = top_n, mol_id = mol_id, compounds_filt = compounds_filt, spectra_filt = spectra_filt, uis_num = uis_num)
