@@ -31,6 +31,8 @@ from scipy.stats import mode
 from operator import itemgetter
 from collections import Counter
 from tqdm import tqdm
+import joblib
+import contextlib
 
 def my_round(val, decimal=2):
     multiplier = 10**decimal
@@ -122,11 +124,13 @@ Output: query (row), background_filt (background for query prec_mz), transitions
 """
 
 def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy = 35, q3 = False, top_n = 0.1, uis_num = 0, choose = True):
+
     query_opt = spectra_filt.loc[(spectra_filt['mol_id'] == mol_id)]
 
     if adduct != []:
         adduct = [str(x) for x in adduct]
         query_opt = query_opt.loc[query_opt['prec_type'].isin(adduct)]
+        # note: it is possible for query_opt to have 0 elements here!
 
     query_opt = query_opt.reset_index(drop=True)
     same = spectra_filt.loc[spectra_filt['mol_id']==mol_id]
@@ -238,7 +242,34 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
         uis = -1
         interferences = -1
         transitions = -1
-    return query, background_filt, uis, interferences, transitions  
+    # convert full dfs to just ids
+    query_ids = query[["spectrum_id","mol_id"]]
+    background_ids = background_filt[["spectrum_id","mol_id"]]
+    return query_ids, background_ids, uis, interferences, transitions  
+
+
+"""
+Function to integrate joblib with tqdm progress bar
+https://stackoverflow.com/a/58936697/6937913
+"""
+@contextlib.contextmanager
+def tqdm_joblib(tqdm_object):
+    """Context manager to patch joblib to report into tqdm progress bar given as argument"""
+    class TqdmBatchCompletionCallback(joblib.parallel.BatchCompletionCallBack):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
+        def __call__(self, *args, **kwargs):
+            tqdm_object.update(n=self.batch_size)
+            return super().__call__(*args, **kwargs)
+
+    old_batch_callback = joblib.parallel.BatchCompletionCallBack
+    joblib.parallel.BatchCompletionCallBack = TqdmBatchCompletionCallback
+    try:
+        yield tqdm_object
+    finally:
+        joblib.parallel.BatchCompletionCallBack = old_batch_callback
+        tqdm_object.close()
 
 """
 function profile:
@@ -247,33 +278,33 @@ Input: parameters for choose_background_and_query
 Output: compounds list with added columns of 'USI1' and 'Average Interference'
 """
 
-def profile(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy=35, q3 = False, top_n = 0.1, mol_id = 0, uis_num=0):    
+def profile(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy=35, q3 = False, top_n = 0.1, mol_id = 0, uis_num=0):
     uis_all = []
     int_all = []
     trans_all = []
-    for i, molecule in compounds_filt.iterrows():
-        molid = molecule['mol_id']
-        query, background, uis, interferences, transitions = choose_background_and_query(mol_id = molid, change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3,
-                                                                                         adduct = adduct, col_energy = col_energy, q3 = q3, top_n = top_n, spectra_filt = spectra_filt, uis_num=uis_num)
-        
-        uis_all.append(uis)
-        int_all.append(interferences)
-        trans_all.append(transitions)
+
+    # only keep necessary columns, to reduce memory footprint
+    _spectra_filt = spectra_filt[["spectrum_id","mol_id","prec_type","col_energy","res","prec_mz","peaks"]]
+    mol_ids = compounds_filt["mol_id"]
+
+    with tqdm_joblib(tqdm(desc="bg & q", total=mol_ids.shape[0])) as pbar:
+        par_func = joblib.delayed(choose_background_and_query)
+        pool = joblib.Parallel()
+        results = pool(
+            par_func(
+                mol_id = mol_id, change = change, ppm = ppm, 
+                change_q3 = change_q3, ppm_q3 = ppm_q3, 
+                adduct = adduct, col_energy = col_energy, 
+                q3 = q3, top_n = top_n, spectra_filt = _spectra_filt, 
+                uis_num=uis_num
+            ) for idx, mol_id in mol_ids.iteritems()
+        )
+
+    query_ids_all, background_ids_all, uis_all, int_all, trans_all = zip(*results)
     compounds_filt['UIS'] = uis_all
     compounds_filt['Interferences'] = int_all
     compounds_filt['Transitions'] = trans_all
     return compounds_filt
-
-"""
-function profile_specific:
-Based on the given parameters calculates the number of UIS and Interferences for a specific mol_id that is provided as input.
-Input: parameters for choose_background_and_query, a specific mol_id (mol_id), plot_back = True (will plot interferences if present as range of their prec_mz)
-Output: compounds list with added columns of 'USI1' and 'Average Interference', count plot (interferences for a specific mol_id, based on range of prec_mz) 
-"""
-def profile_specific(compounds_filt, spectra_filt, mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy=35, q3 = False, top_n = 0.1, uis_num = 0):
-    query, background, uis, interferences, transitions = choose_background_and_query(mol_id = mol_id, change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3,
-                                                                                     col_energy = col_energy,adduct = adduct, q3 = q3, top_n = top_n, spectra_filt = spectra_filt, uis_num=uis_num)
-    return query, background, uis, interferences, transitions 
 
 """
 function method_profiler:
@@ -325,11 +356,11 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     max_mz = spectra_filt["mzs"].apply(max).max()
     assert max_mz < 2000., max_mz
 
-    def compute_spec(row, mz_max=2000., mz_res=1.0):
+    def compute_spec(row, mz_max=2000.):
         mzs = np.array(row["mzs"])
         ints = 100*np.array(row["ints"])
-        mz_bins = np.arange(0.,mz_max+mz_res,step=mz_res)
-        mz_bin_idxs = np.digitize(mzs,bins=mz_bins,right=True)
+        mz_bins = np.arange(0.5,mz_max+0.5,step=1.0)
+        mz_bin_idxs = np.digitize(mzs,bins=mz_bins,right=False)
         spec = np.zeros([len(mz_bins)],dtype=float)
         for i in range(len(mz_bin_idxs)):
             spec[mz_bin_idxs[i]] += ints[i]
@@ -351,34 +382,44 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     # get mapping from spectrum id to idx of the matrix
     spec_id2idx = {spec_id:spec_idx for spec_idx,spec_id in enumerate(spectra_filt["spectrum_id"].tolist())}
 
+    # number of interfering spectra, per query
     num_spectra = []
+    # number of interfering compounds, per query
     num_comps = []
+    # the set of minimal CEs per interfering compound, per query
     all_min_ces = []
+    # the precursor mz of the query
     prec_mzs = []
+
+    # only keep necessary columns, to reduce memory footprint
+    spectra_filt = spectra_filt[["spectrum_id","mol_id","prec_type","col_energy","res","prec_mz","peaks"]].copy()
 
     # find optimal CE for each compound
     for i, mol_id in tqdm(compounds_filt["mol_id"].iteritems(),desc="> optimal_ce",total=compounds_filt.shape[0]):
-        
-        query, background, _, _, _  = choose_background_and_query(
+
+        query_ids, background_ids, _, _, _  = choose_background_and_query(
             mol_id = mol_id, col_energy = 0, change=25, 
-            q3 = False, spectra_filt = spectra_filt.copy(),
+            q3 = False, spectra_filt = spectra_filt,
             choose=False, top_n=0, adduct=['[M+H]+']
         )
-        if query.shape[0] == 0:
+        if query_ids.shape[0] == 0:
             # this happens when the mol_id only corresponds to adducts that are not "[M+H]+"
             import pdb; pdb.set_trace()
 
-        query_spec_idx = query["spectrum_id"].map(spec_id2idx).to_numpy()
-        background["spec_idx"] = background["spectrum_id"].map(spec_id2idx)
-        bg_mol_ids = background["mol_id"].unique().tolist()
+        query_spec_idx = query_ids["spectrum_id"].map(spec_id2idx).to_numpy()
+        background_ids["spec_idx"] = background_ids["spectrum_id"].map(spec_id2idx)
+        bg_mol_ids = background_ids["mol_id"].unique().tolist()
         
+        query_prec_mzs = spectra_filt[spectra_filt["mol_id"].isin(query_ids["mol_id"])]["prec_mz"]
+        assert query_prec_mzs.nunique() == 1, query_prec_mzs.nunique()
+
         num_comps.append(len(bg_mol_ids))
-        prec_mzs.append(query["prec_mz"].tolist()[0])
-        num_spectra.append(background['spectrum_id'].nunique())
+        prec_mzs.append(query_prec_mzs.tolist()[0])
+        num_spectra.append(background_ids['spectrum_id'].nunique())
 
         cur_min_ces = []
-        for bg_mol_id in bg_mol_ids:    
-            background_spec_idx = background[background["mol_id"] == bg_mol_id]["spec_idx"].to_numpy()
+        for bg_mol_id in bg_mol_ids:  
+            background_spec_idx = background_ids[background_ids["mol_id"] == bg_mol_id]["spec_idx"].to_numpy()
             score_mat = all_mat[query_spec_idx][:,background_spec_idx]
             assert not score_mat.size == 0
             cur_min_ces.append(compute_optimal_ces(score_mat))
@@ -390,14 +431,16 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     compounds_filt['m/z'] = prec_mzs
     return compounds_filt
 
+"""
+Helper function for computing optimal CE
+"""
 def compute_optimal_ces(score_mat):
     
-    # this is absolute difference
     row_mat = score_mat[:,:,0]
     col_mat = score_mat[:,:,1]
-    ce_diff_mat = score_mat[:,:,2]
+    ce_diff_mat = score_mat[:,:,2] # this is difference
     cos_sim_mat = score_mat[:,:,3]
-    ce_abs_diff_mat = np.abs(ce_diff_mat)
+    ce_abs_diff_mat = np.abs(ce_diff_mat) # this is absolute difference
 
     min_ce_diff_row = np.min(ce_abs_diff_mat, axis=1)
     min_ce_diff_mask_row = ce_diff_mat.T == min_ce_diff_row 
@@ -428,3 +471,76 @@ def compute_optimal_ces(score_mat):
     # print(min_row_ces)
     # import sys; sys.exit(0)
     return min_row_ces
+
+def test_optimal_ce_1():
+
+    query_ce = np.array([1.,3.,5.,7.]).reshape(-1,1)
+    bg_ce = np.array([1.,2.,4.,6.,7.,10.]).reshape(1,-1)
+    query_mat = np.broadcast_to(query_ce,[query_ce.shape[0],bg_ce.shape[1]])
+    background_mat = np.broadcast_to(bg_ce,[query_ce.shape[0],bg_ce.shape[1]])
+    # query_mat = np.array([
+    #     [1,1,1,1,1,1],
+    #     [3,3,3,3,3,3],
+    #     [5,5,5,5,5,5],
+    #     [7,7,7,7,7,7]
+    # ],dtype=float)
+    # background_mat = np.array([
+    #     [1,2,4,6,7,10],
+    #     [1,2,4,6,7,10],
+    #     [1,2,4,6,7,10],
+    #     [1,2,4,6,7,10]
+    # ],dtype=float) 
+    ce_diff_mat = query_mat - background_mat
+    sim_mat = np.array([
+        [.1,.3,.5,.2,.1,.1],
+        [.2,.1,.1,.1,.1,.1],
+        [.2,.1,.4,.1,.1,.1],
+        [.3,.3,.2,.3,.1,.1]
+    ])
+
+    score_mat = np.stack([query_mat,background_mat,ce_diff_mat,sim_mat],axis=-1)
+
+    expected_minimal_ces = [1.,7.]
+    computed_minimal_ces = compute_optimal_ces(score_mat)
+    print(expected_minimal_ces,computed_minimal_ces)
+
+def test_optimal_ce_2():
+
+    query_ce = np.array([1.,3.,5.]).reshape(-1,1)
+    bg_ce = np.array([2.,4.,6.]).reshape(1,-1)
+    query_mat = np.broadcast_to(query_ce,[query_ce.shape[0],bg_ce.shape[1]])
+    background_mat = np.broadcast_to(bg_ce,[query_ce.shape[0],bg_ce.shape[1]])
+    ce_diff_mat = query_mat - background_mat
+    sim_mat = np.array([
+        [.1,.1,.1],
+        [.1,.1,.1],
+        [.1,.1,.1]
+    ])
+    score_mat = np.stack([query_mat,background_mat,ce_diff_mat,sim_mat],axis=-1)
+
+    expected_minimal_ces = [5.]
+    computed_minimal_ces = compute_optimal_ces(score_mat)
+    print(expected_minimal_ces,computed_minimal_ces)
+
+def test_optimal_ce_3():
+
+    query_ce = np.array([1.,3.]).reshape(-1,1)
+    bg_ce = np.array([8.,9.,11.]).reshape(1,-1)
+    query_mat = np.broadcast_to(query_ce,[query_ce.shape[0],bg_ce.shape[1]])
+    background_mat = np.broadcast_to(bg_ce,[query_ce.shape[0],bg_ce.shape[1]])
+    ce_diff_mat = query_mat - background_mat
+    sim_mat = np.array([
+        [.1,.2,.3],
+        [.1,.2,.3]
+    ])
+    score_mat = np.stack([query_mat,background_mat,ce_diff_mat,sim_mat],axis=-1)
+
+    expected_minimal_ces = []
+    computed_minimal_ces = compute_optimal_ces(score_mat)
+    print(expected_minimal_ces,computed_minimal_ces)
+
+if __name__ == "__main__":
+
+    test_optimal_ce_1()
+    test_optimal_ce_2()
+    test_optimal_ce_3()
