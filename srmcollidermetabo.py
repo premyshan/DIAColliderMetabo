@@ -27,7 +27,6 @@ import itertools
 import time
 import math
 from math import sqrt
-from scipy.stats import mode 
 from operator import itemgetter
 from collections import Counter
 from tqdm import tqdm
