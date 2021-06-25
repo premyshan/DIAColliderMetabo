@@ -1,17 +1,5 @@
  #SRMColliderMetabo
 from srmcollidermetabo import *
-import pandas as pd
-import numpy as np
-import heapq
-import rdkit
-import difflib
-import re
-import itertools
-import time
-import math
-from math import sqrt
-from statistics import mode, mean
-from operator import itemgetter
 
 allcomp20, spectra20 = read(compounds = 'comp_df20.pkl', spectra = 'spec_df20.pkl')
 allcomp17, spectra17 = read(compounds = 'comp_df17.pkl', spectra = 'spec_df17.pkl')
