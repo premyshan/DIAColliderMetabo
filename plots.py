@@ -4,8 +4,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import statsmodels.formula.api as smf
 from scipy import stats
-from scipy.optimize import curve_fit
 import ast
+from collections import Counter
 import rdkit.Chem as Chem
 from rdkit.Chem.Draw import rdMolDraw2D
 import PIL.Image as Image
