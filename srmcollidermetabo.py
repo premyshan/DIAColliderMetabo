@@ -2,15 +2,15 @@
 """
 Evaluating complex backgrounds that may cause ambiguities in the measurement
 of metabolites. This tool first filters a list of identified metabolites to
-remove chiral isomers (using the Inchikey). This filtered list is then used to
-profile different methods for unique transitions as follows in the Q1 and Q3
-phases with the mentioned filters to identify the number of unique ion
-signatures (UIS) per mol_id.
+remove steroisomers (using the Inchikey) and the given experimental conditions.
+This filtered list is then used to profile different methods for unique transitions
+as follows using MS1 and MS2 windows with the mentioned filters to identify the
+number of unique ion signatures (UIS) per molecular id (mol_id).
 
-Q1/Q3
-MS1 -  0.7 Da / -      ; 20ppm / -
-MRM -  0.7 Da / 0.7 Da ; 25 Da / 0.7 Da
-SWATH - 25 Da / 20 ppm
+MS1/MS2
+MS1 -  0.7 Da / - ; 25ppm / -
+MRM -  0.7 Da / 0.7 Da
+SWATH - 25 Da / 25 ppm; 25 ppm / 25 ppm
 
 This tool will also measure the number of interferences for each transition
 (the number of identical transitions within the range of metabolites filtered
@@ -19,16 +19,12 @@ as specified above).
 """
 import pandas as pd
 import numpy as np
-import heapq
 import rdkit
-import difflib
 import re
 import itertools
 import time
 import math
-from math import sqrt
 from operator import itemgetter
-from collections import Counter
 from tqdm import tqdm
 import joblib
 import contextlib
@@ -497,7 +493,7 @@ def test_optimal_ce_1():
 
     score_mat = np.stack([query_mat,background_mat,ce_diff_mat,sim_mat],axis=-1)
 
-    expected_minimal_ces = [1.,7.]
+    expected_minimal_ces = [1.,5.,7.]
     computed_minimal_ces = compute_optimal_ces(score_mat)
     print(expected_minimal_ces,computed_minimal_ces)
 
