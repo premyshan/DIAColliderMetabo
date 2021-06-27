@@ -6,7 +6,7 @@ This filtered list is then used to profile different methods for unique transiti
 as follows using MS1 and MS2 windows with the mentioned filters to identify the
 number of unique ion signatures (UIS) per molecular id (mol_id).
 
-
+srmcollidermetabo.py - main analysis script\
 mainrun17.py, mainrun20sub - profiling MS methods using NIST 17 and validating using novel compounds in NIST 20 respectively\
 libsize17.py - saturation analyses based on matrix complexity using NIST 17\
 transnum17.py - saturation analyses based on transition number used for UIS using NIST 17\
