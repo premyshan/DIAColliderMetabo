@@ -341,10 +341,10 @@ def optimal_ce_filter(compounds_filt, spectra_filt, adduct):
     compounds_filt = compounds_filt.reset_index(drop=True)
     return compounds_filt, spectra_filt
 
- """
- function collision_energy_optimizer:
- Finds pairwise-optimal collision energies (POCE) per compound 
- """
+"""
+function collision_energy_optimizer:
+Finds pairwise-optimal collision energies (POCE) per compound 
+"""
 def collision_energy_optimizer(compounds_filt, spectra_filt):
 
     # quick check that spectra mz are bounded
@@ -468,9 +468,9 @@ def compute_optimal_ces(score_mat):
     # import sys; sys.exit(0)
     return min_row_ces
 
- """
- testing
- """
+"""
+testing
+"""
 def test_optimal_ce_1():
 
     query_ce = np.array([1.,3.,5.,7.]).reshape(-1,1)
