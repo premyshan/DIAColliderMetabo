@@ -440,10 +440,10 @@ def compute_optimal_ces(score_mat):
     ce_abs_diff_mat = np.abs(ce_diff_mat) # this is absolute difference
 
     min_ce_diff_row = np.min(ce_abs_diff_mat, axis=1)
-    min_ce_diff_mask_row = ce_diff_mat.T == min_ce_diff_row 
+    min_ce_diff_mask_row = ce_abs_diff_mat.T == min_ce_diff_row 
 
     min_ce_diff_col = np.min(ce_abs_diff_mat, axis=0)
-    min_ce_diff_mask_col = ce_diff_mat == min_ce_diff_col 
+    min_ce_diff_mask_col = ce_abs_diff_mat == min_ce_diff_col 
 
     min_ce_diff_mask_entries = min_ce_diff_mask_row.T + min_ce_diff_mask_col
 
