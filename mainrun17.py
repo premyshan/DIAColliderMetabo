@@ -1,17 +1,5 @@
  #SRMColliderMetabo
 from srmcollidermetabo import *
-import pandas as pd
-import numpy as np
-import heapq
-import rdkit
-import difflib
-import re
-import itertools
-import time
-import math
-from math import sqrt
-from statistics import mode, mean
-from operator import itemgetter
 
 allcomp, spectra = read(compounds = 'comp_df17.pkl', spectra = 'spec_df17.pkl')
 compounds_filt, spectra_filt = filter_comp(compounds_filt=allcomp, spectra=spectra)

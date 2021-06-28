@@ -1,18 +1,6 @@
 #SRMColliderMetabo
 #test overlapping compounds HCD vs. IT/FT (to compare orbitrap instruments measured with CE and NCE) 
 from srmcollidermetabo import *
-import pandas as pd
-import numpy as np
-import heapq
-import rdkit
-import difflib
-import re
-import itertools
-import time
-import math
-from math import sqrt
-from statistics import mode, mean
-from operator import itemgetter
 
 allcomp, spectra = read(compounds = 'comp_df17.pkl', spectra = 'spec_df17.pkl')
 spectra['col_energy'].replace(regex=True,inplace=True,to_replace='[^0-9.]',value=r'') #IT/FT has % which our original script removes 

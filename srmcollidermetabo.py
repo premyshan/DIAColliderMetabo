@@ -2,15 +2,15 @@
 """
 Evaluating complex backgrounds that may cause ambiguities in the measurement
 of metabolites. This tool first filters a list of identified metabolites to
-remove chiral isomers (using the Inchikey). This filtered list is then used to
-profile different methods for unique transitions as follows in the Q1 and Q3
-phases with the mentioned filters to identify the number of unique ion
-signatures (UIS) per mol_id.
+remove steroisomers (using the Inchikey) and the given experimental conditions.
+This filtered list is then used to profile different methods for unique transitions
+as follows using MS1 and MS2 windows with the mentioned filters to identify the
+number of unique ion signatures (UIS) per molecular id (mol_id).
 
-Q1/Q3
-MS1 -  0.7 Da / -      ; 20ppm / -
-MRM -  0.7 Da / 0.7 Da ; 25 Da / 0.7 Da
-SWATH - 25 Da / 20 ppm
+MS1/MS2
+MS1 -  0.7 Da / - ; 25ppm / -
+MRM -  0.7 Da / 0.7 Da
+SWATH - 25 Da / 25 ppm; 25 ppm / 25 ppm
 
 This tool will also measure the number of interferences for each transition
 (the number of identical transitions within the range of metabolites filtered
@@ -19,17 +19,12 @@ as specified above).
 """
 import pandas as pd
 import numpy as np
-import heapq
 import rdkit
-import difflib
 import re
 import itertools
 import time
 import math
-from math import sqrt
-from scipy.stats import mode 
 from operator import itemgetter
-from collections import Counter
 from tqdm import tqdm
 import joblib
 import contextlib
@@ -60,10 +55,8 @@ def read(compounds, spectra):
 
 """
 function filter:
-
-Filter the compound list based on the inchikey to take out chiral isomers but keep structural isomers. 
-
-input: Original list of compounds 
+Filter the compound list (stereoisomers and experimental conditions given)
+input: list of compounds, list of spectra, collision energy, collision gas, ion mode, instrument type, adducts
 output: Filtered compound list
 """
 def filter_comp(compounds_filt, spectra, col_energy = 35, col_gas = 'N2', ion_mode = 'P',inst_type = ['Q-TOF', 'HCD'], adduct = ['[M+H]+', '[M+Na]+']):
@@ -111,16 +104,12 @@ def filter_comp(compounds_filt, spectra, col_energy = 35, col_gas = 'N2', ion_mo
 
 """
 function choose_background_and_query:
-Per mol_id, choosing a specific query (based on given mol_id and parameters), followed by choosing the background
-to compare this query to based on the Q1 and Q3 filters.
-
-Input: mol_id, Q1 parameters (change, ppm - if ppm is filled, that will take priority over change), query parameters
-        (col_energy, col_gas, ion_mode, isnt_type, adduct), Q3 parameters (if q3 = True, will take into account
-        change_q3 or ppm_q3 parameters, otherwise only Q1), top_n (the top % of fragment ions to look at from which
-        the most intense is chosen for the transition)
-
-Output: query (row), background_filt (background for query prec_mz), transitions_q1 (background for frag_mz),
-        query_frag_mz_value (value of transition frag_mz), query_frag_mz (query fragment m/z with intensity)
+Choosing the background for each query (based on mol_id), based on the given MS1 (Q1) and MS2 (Q3) window sizes. 
+Fragment spectra are filtered according the top_n value (% relative intensity) and the given n for UIS.
+Input: spectra, mol_id, MS1/MS2 window sizes (Q1/Q3, MS1 - change/ppm, MS2 - change_q3/ppm_q3 - if ppm is filled, that will take priority over change),
+       query parameters (col_energy, adducts), Q3 parameters (if q3 = True, will take into account change_q3 or ppm_q3 parameters, otherwise only Q1),
+       top_n (the top n% of fragment ions), uis (n number of transitions chosen)
+Output: query ids, background ids, number of transitions, uis (boolean if compound is unique), interferences (number of interferences per compound)
 """
 
 def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy = 35, q3 = False, top_n = 0.1, uis_num = 0, choose = True):
@@ -171,7 +160,7 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
         transitions=len(query_frag_mz_values)
 
         if q3 == True:
-            if top_n < 0.1: #default of top_n=0.1 for background relative intensity
+            if top_n < 0.1: #default of 0.1 for background relative intensity filter
                 top_n = 0.1
             for transition in query_frag_mz_values:
                 if ppm_q3 != 0:
@@ -273,9 +262,9 @@ def tqdm_joblib(tqdm_object):
 
 """
 function profile:
-Based on the given parameters calculates the number of USI and Interferences by mol_id.
+Based on the given parameters calculates the number of uis and interferences by mol_id.
 Input: parameters for choose_background_and_query
-Output: compounds list with added columns of 'USI1' and 'Average Interference'
+Output: query ids, background ids, number of transitions, uis (boolean if compound is unique), interferences (number of interferences per compound)
 """
 
 def profile(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy=35, q3 = False, top_n = 0.1, mol_id = 0, uis_num=0):
@@ -308,9 +297,9 @@ def profile(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, pp
 
 """
 function method_profiler:
-Profiles datasets according to specific Q1/Q3 windows 
-Input: parameters for choose_background_and_query (q3 stays False in this case, no q3 window is taken into account) 
-Output: compounds list with added columns of 'UIS' and 'Average Interference'
+Profiles datasets according to specific MS1/MS2 (Q1/Q3) windows 
+Input: compounds, spectra, parameters for profile/choose_background_and_query  
+Output: compounds list with added columns of 'UIS' and 'Interferences'
 """
 
 def method_profiler(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, adduct = ['[M+H]+', '[M+Na]+'], col_energy = 35, q3 = False, top_n = 0.1, mol_id = 0, uis_num = 0):
@@ -325,6 +314,10 @@ def method_profiler(compounds_filt, spectra_filt, change = 0, ppm = 0, change_q3
     print("Time to completion of profiler: " + str(end-start))    
     return profiled
 
+"""
+function optimal_ce_filter:
+Filter function for collision_energy_optimizer
+"""
 def optimal_ce_filter(compounds_filt, spectra_filt, adduct):
     
     spectra_filt = spectra_filt[spectra_filt["prec_type"] == adduct].reset_index(drop=True)
@@ -350,6 +343,10 @@ def optimal_ce_filter(compounds_filt, spectra_filt, adduct):
     compounds_filt = compounds_filt.reset_index(drop=True)
     return compounds_filt, spectra_filt
 
+"""
+function collision_energy_optimizer:
+Finds pairwise-optimal collision energies (POCE) per compound 
+"""
 def collision_energy_optimizer(compounds_filt, spectra_filt):
 
     # quick check that spectra mz are bounded
@@ -432,10 +429,11 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
     return compounds_filt
 
 """
-Helper function for computing optimal CE
+function compute_optimal_ces:
+Helper function for computing optimal POCE (collision_energy_optimizer)
 """
 def compute_optimal_ces(score_mat):
-
+    
     row_mat = score_mat[:,:,0]
     col_mat = score_mat[:,:,1]
     ce_diff_mat = score_mat[:,:,2] # this is difference
@@ -472,6 +470,9 @@ def compute_optimal_ces(score_mat):
     # import sys; sys.exit(0)
     return min_row_ces
 
+"""
+testing
+"""
 def test_optimal_ce_1():
 
     query_ce = np.array([1.,3.,5.,7.]).reshape(-1,1)
