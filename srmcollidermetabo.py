@@ -431,7 +431,7 @@ def collision_energy_optimizer(compounds_filt, spectra_filt):
 Helper function for computing optimal CE
 """
 def compute_optimal_ces(score_mat):
-    
+
     row_mat = score_mat[:,:,0]
     col_mat = score_mat[:,:,1]
     ce_diff_mat = score_mat[:,:,2] # this is difference
@@ -439,10 +439,10 @@ def compute_optimal_ces(score_mat):
     ce_abs_diff_mat = np.abs(ce_diff_mat) # this is absolute difference
 
     min_ce_diff_row = np.min(ce_abs_diff_mat, axis=1)
-    min_ce_diff_mask_row = ce_diff_mat.T == min_ce_diff_row 
+    min_ce_diff_mask_row = ce_abs_diff_mat.T == min_ce_diff_row 
 
     min_ce_diff_col = np.min(ce_abs_diff_mat, axis=0)
-    min_ce_diff_mask_col = ce_diff_mat == min_ce_diff_col 
+    min_ce_diff_mask_col = ce_abs_diff_mat == min_ce_diff_col 
 
     min_ce_diff_mask_entries = min_ce_diff_mask_row.T + min_ce_diff_mask_col
 
@@ -474,18 +474,6 @@ def test_optimal_ce_1():
     bg_ce = np.array([1.,2.,4.,6.,7.,10.]).reshape(1,-1)
     query_mat = np.broadcast_to(query_ce,[query_ce.shape[0],bg_ce.shape[1]])
     background_mat = np.broadcast_to(bg_ce,[query_ce.shape[0],bg_ce.shape[1]])
-    # query_mat = np.array([
-    #     [1,1,1,1,1,1],
-    #     [3,3,3,3,3,3],
-    #     [5,5,5,5,5,5],
-    #     [7,7,7,7,7,7]
-    # ],dtype=float)
-    # background_mat = np.array([
-    #     [1,2,4,6,7,10],
-    #     [1,2,4,6,7,10],
-    #     [1,2,4,6,7,10],
-    #     [1,2,4,6,7,10]
-    # ],dtype=float) 
     ce_diff_mat = query_mat - background_mat
     sim_mat = np.array([
         [.1,.3,.5,.2,.1,.1],
@@ -496,7 +484,7 @@ def test_optimal_ce_1():
 
     score_mat = np.stack([query_mat,background_mat,ce_diff_mat,sim_mat],axis=-1)
 
-    expected_minimal_ces = [1.,7.]
+    expected_minimal_ces = [1.,5.,7.]
     computed_minimal_ces = compute_optimal_ces(score_mat)
     print(expected_minimal_ces,computed_minimal_ces)
 
