@@ -18,182 +18,6 @@ import PIL.Image as Image
 import io
 from matplotlib.pyplot import imshow
 
-
-def comp_spec_details(col_energy = 35, col_gas = 'N2', ion_mode = 'P',inst_type = ['Q-TOF', 'HCD'], adduct = ['[M+H]+', '[M+Na]+']):
-    compounds_filt, spectra = read(compounds = 'comp_df17.pkl', spectra = 'spec_df17.pkl')
-    #adduct = ['[M+H]+']
-    print(compounds_filt["inchikey"])
-    print(len(compounds_filt))
-    compounds_filt['inchikey'] = compounds_filt['inchikey'].str[:14]
-    print(compounds_filt["inchikey"])
-    print(len(compounds_filt))
-
-    compounds_filt = compounds_filt.drop_duplicates(subset='inchikey', keep=False)
-    spectra_filt_all = spectra.loc[spectra['mol_id'].isin(compounds_filt.mol_id)]
-    print(len(compounds_filt))
-    print(len(spectra_filt_all))
-
-    if ion_mode != '':
-        spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['ion_mode'] == str(ion_mode)]
-    cf = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt_all.mol_id)]
-    print(len(cf))
-    print(len(spectra_filt_all))
-
-    spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['res']>=2]
-    print(len(spectra_filt_all))
-    print(spectra_filt_all.res.value_counts())
-
-    cf = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt_all.mol_id)]
-    print(len(cf))
-    print(len(spectra_filt_all))
-
-    if inst_type != '':
-        inst_type = [str(x) for x in inst_type]
-        spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['inst_type'].isin(inst_type)]
-
-    cf = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt_all.mol_id)]
-    print(len(cf))
-    print(len(spectra_filt_all))
-
-    print(spectra_filt_all['col_energy'].value_counts())
-    print(len(spectra_filt_all))
-    spectra_filt_all['col_energy'] = spectra_filt_all['col_energy'].apply(lambda x: str(x).split('%')[-1])
-    print(spectra_filt_all.col_energy.value_counts())
-    print(set(spectra_filt_all.col_energy))
-    print(len(spectra_filt_all))
-    print(len(set(spectra_filt_all.col_energy)))
-    spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy']!=""]
-    print(len(spectra_filt_all))
-    print(len(set(spectra_filt_all.col_energy)))
-    spectra_filt_all['col_energy'].replace(regex=True,inplace=True,to_replace='[^0-9.]',value=r'')
-    print(spectra_filt_all.col_energy.value_counts())
-    print(set(spectra_filt_all.col_energy))
-    print(len(spectra_filt_all))
-    spectra_filt_all.loc[:,'col_energy'] = spectra_filt_all['col_energy'].astype(float)
-    print(spectra_filt_all.col_energy.value_counts())
-    print(set(spectra_filt_all.col_energy))
-    spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy']!=0.]
-    cf = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt_all.mol_id)]
-    print(len(cf))
-    print(len(spectra_filt_all))
-    print(spectra_filt_all.col_energy.value_counts())
-    print(set(spectra_filt_all.col_energy))
-    print(len(set(spectra_filt_all.col_energy)))
-    
-    if col_energy != 0:
-        low = int(col_energy)-5
-        high = int(col_energy)+5
-        print(spectra_filt_all['col_energy'].value_counts())
-        spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_energy'].between(low, high, inclusive = True)]
-    cf = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt_all.mol_id)]
-    print(len(cf))
-    print(len(spectra_filt_all))
-    print(spectra_filt_all)
-
-    if col_gas != '':
-        spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['col_gas'] == str(col_gas)]
-
-    cf = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt_all.mol_id)]
-    print(len(cf))
-    print(len(spectra_filt_all))
-    print(spectra_filt_all)
-
-    spectra_filt_all.loc[:,'peaks'] = spectra_filt_all['peaks'].apply(lambda x: [(a,b/(max(x,key=itemgetter(1))[1])) for (a,b) in x])
-    print(spectra_filt_all)
-    print(spectra_filt_all['peaks'])
-
-    print("before")
-    print(set(spectra_filt_all.spec_type))
-
-    spectra_filt_all = spectra_filt_all.loc[spectra_filt_all['spec_type'] == 'MS2']
-    print(len(spectra_filt_all))
-    print(set(spectra_filt_all.spec_type))
-
-    spectra_filt_all.loc[:,'prec_mz'] = spectra_filt_all['prec_mz'].astype(float)
-    print(len(spectra_filt_all))
-    print(spectra_filt_all.prec_mz)
-
-    if adduct != []:
-        adduct = [str(x) for x in adduct]
-        spectra_filt_add = spectra_filt_all.loc[spectra_filt_all['prec_type'].isin(adduct)]
-    else:
-        spectra_filt_add = spectra_filt_all
-    print(len(spectra_filt_add))
-    print(len(set(spectra_filt_add.mol_id)))
-
-    compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt_add.mol_id)]
-    print(len(compounds_filt))
-    print(len(spectra_filt_add))
-
-    print(set(spectra_filt_all['col_energy']))
-    print(set(spectra_filt_all['ion_mode']))
-    print(set(spectra_filt_all['inst_type']))
-    print(set(spectra_filt_all['prec_type']))
-    print(set(spectra_filt_all['spec_type']))
-    print(set(spectra_filt_all['col_gas']))
-    print(set(spectra_filt_all['ion_type']))
-
-    print(set(spectra_filt_add['col_energy']))
-    print(set(spectra_filt_add['ion_mode']))
-    print(set(spectra_filt_add['inst_type']))
-    print(set(spectra_filt_add['prec_type']))
-
-    print(spectra_filt_add.prec_type.value_counts())
-    print(spectra_filt_add.inst_type.value_counts())
-    print(spectra_filt_add.col_energy.value_counts())
-
-    print(spectra_filt_all.prec_type.value_counts())
-    print(spectra_filt_all.inst_type.value_counts())
-    print(spectra_filt_all.col_energy.value_counts())
-
-    sns.set_palette("rocket")
-    pd.to_numeric(spectra_filt_all['col_energy']).hist(by=spectra_filt_all['inst_type'])
-    plt.show()
-
-    #print spectra all
-    print("spectra all")
-
-    #'purple', 'deeppink', 
-    sns.set_palette("rocket", n_colors = 3)
-    print(max(spectra_filt_all['prec_mz']))
-    print(min(spectra_filt_all['prec_mz']))
-    sns.distplot(spectra_filt_all['prec_mz'], kde=False)
-    plt.show()
-
-    #print spectra add
-    print("spectra add")
-    sns.set_palette("rocket", n_colors = 3)
-    sns.distplot(spectra_filt_add['prec_mz'], kde=False)
-    plt.show()
-
-    #compounds_filt, spectra_filt = optimal_ce_filter(compounds_filt, spectra_filt_all, "[M+H]+")
-    print(len(compounds_filt))
-    print(len(spectra_filt))
-
-    print('hcd')
-    hcd = spectra_filt_all.loc[spectra_filt_all['inst_type']=='HCD']
-    print(len(set(hcd['col_energy'])))
-    print(len(hcd))
-    print(len(set(hcd.mol_id)))
-    print('qtof')
-    qtof = spectra_filt_all.loc[spectra_filt_all['inst_type']=='Q-TOF']
-    print(len(set(qtof['col_energy'])))
-    print(len(qtof))
-    print(len(set(qtof.mol_id)))
-    
-    both = set(hcd['mol_id']).intersection(set(qtof['mol_id']))
-    compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(both)]
-    print(len(compounds_filt))
-    hcd = hcd.loc[hcd['mol_id'].isin(compounds_filt.mol_id)]
-    print(len(hcd))
-    print(len(set(hcd.mol_id)))
-    
-    qtof = qtof.loc[qtof['mol_id'].isin(compounds_filt.mol_id)]
-    print(len(qtof))
-    print(len(set(qtof.mol_id)))
-
-    return compounds_filt, spectra_filt_all
-
 def uis_plot(ms1 = ["ms1_7", "ms1_25"], ms2 = ["mrm_7_7", "swath_25da_25", "prm_2_20","swath_25_25"], sizes = [1,2,3], file_suffix = "_609nist17.csv", labels = ['SWATH- 25Da/25ppm', 'SWATH- 25Da/10ppm','SWATH- 25Da/1ppm','SWATH- 25ppm/25ppm','SWATH- 25ppm/10ppm','SWATH- 25ppm/1ppm']):
     uis_all = []
     for size in sizes:
@@ -363,7 +187,6 @@ def ce_opt_plot(file_name = "ce_opt_615_qtof_25da.csv"):
     print(len(ce2))
     ce2['AllCE'] = ce2['AllCE'].apply(lambda x: ast.literal_eval(x))
 
-    #find POCE and Opt CE
     all_settings = []
     for i, row in ce2.iterrows():
         count=0
@@ -376,21 +199,21 @@ def ce_opt_plot(file_name = "ce_opt_615_qtof_25da.csv"):
             count += 1
             ce_settings.append(row['Optimal Collision Energy'])
             row['AllCE'] = [item for item in row['AllCE'] if row['Optimal Collision Energy'] not in item]            
-            #print(row['AllCE'])
-        #print(ce_settings)
-        #print(count)
         all_settings.append(count)
     ce2['all_ce_settings'] =all_settings
-    #print(ce2['all_ce_settings'])
-    #print(ce2['all_ce_settings'].value_counts())
 
     #number of POCE required to differentiate compounds
+    bins = range(1,max(ce2['all_ce_settings'])+2)
+    #n_bins = max(ce2['all_ce_settings'])+1
+    print(min(ce2['all_ce_settings']))
+    print(max(ce2['all_ce_settings']))
     ce2 = ce2.sort_values(by=['all_ce_settings'],ascending=True)
-    ax = ce2['all_ce_settings'].hist()
-    for p in ax.patches:
-        height = p.get_height()
-        ax.text(p.get_x()+0.25, height+ 3, '%.0f'%(height))
-    ax.grid(False)
+    n, bins, patches = plt.hist(list(ce2['all_ce_settings']), bins=bins, edgecolor='black')
+    ticks = [(patch._x0 + patch._x1)/2 for patch in patches]
+    print(ticks)
+    ticklabels = [i for i in range(1,max(ce2['all_ce_settings'])+1)]
+    print(ticklabels)
+    plt.xticks(ticks, ticklabels)
     plt.show()
     
 def compare_UIS_specific(d, index):
@@ -566,7 +389,6 @@ def spec_details(top_n=0.1):
     for p in ax.patches:
         ax.annotate(f'\n{p.get_height()}', (p.get_x()+0.4, p.get_height()), ha='center', size=10)
     plt.show()
-        
 
 def get_mol_im(smiles, queryid):
 	width = 500
@@ -644,6 +466,4 @@ def profile_specific(mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, add
 ##
 ###ce_det
 ##ce_dist()
-#comp_spec_details --> UIS plot
-    
-##comp_spec_details()
+
