@@ -193,6 +193,8 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
         high = query_prec_mz + (change/2.0)
         background_filt = background_filt.loc[background_filt['prec_mz'].between(low, high, inclusive = True)]
         if q3 == True:
+            if top_n < 0.1: #default of top_n=0.1 for background relative intensity
+                top_n = 0.1
             query_frag_mz = list(query['peaks'])[0]
             query_frag_mz = [(a,b) for (a,b) in query_frag_mz if (b>(top_n))]
             query_frag_mz.sort(key = lambda x: x[1], reverse = True)
@@ -477,18 +479,6 @@ def test_optimal_ce_1():
     bg_ce = np.array([1.,2.,4.,6.,7.,10.]).reshape(1,-1)
     query_mat = np.broadcast_to(query_ce,[query_ce.shape[0],bg_ce.shape[1]])
     background_mat = np.broadcast_to(bg_ce,[query_ce.shape[0],bg_ce.shape[1]])
-    # query_mat = np.array([
-    #     [1,1,1,1,1,1],
-    #     [3,3,3,3,3,3],
-    #     [5,5,5,5,5,5],
-    #     [7,7,7,7,7,7]
-    # ],dtype=float)
-    # background_mat = np.array([
-    #     [1,2,4,6,7,10],
-    #     [1,2,4,6,7,10],
-    #     [1,2,4,6,7,10],
-    #     [1,2,4,6,7,10]
-    # ],dtype=float) 
     ce_diff_mat = query_mat - background_mat
     sim_mat = np.array([
         [.1,.3,.5,.2,.1,.1],
