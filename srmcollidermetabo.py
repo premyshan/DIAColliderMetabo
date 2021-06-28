@@ -182,7 +182,7 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
         else:
             uis=0
         
-    elif (choose==False) and (len(query_opt)!=0):
+    elif (choose==False) and (len(query_opt)!=0): #not choosing one query, MS1 only filter
         assert len(adduct) == 1, adduct
         query=query_opt
         query_prec_mz=list(query_opt['prec_mz'])[0]
@@ -192,35 +192,7 @@ def choose_background_and_query(spectra_filt, mol_id, change = 0, ppm = 0, chang
         low = query_prec_mz - (change/2.0)
         high = query_prec_mz + (change/2.0)
         background_filt = background_filt.loc[background_filt['prec_mz'].between(low, high, inclusive = True)]
-        if q3 == True:
-            query_frag_mz = list(query['peaks'])[0]
-            query_frag_mz = [(a,b) for (a,b) in query_frag_mz if (b>(top_n))]
-            query_frag_mz.sort(key = lambda x: x[1], reverse = True)
-
-            f1 = my_round(query_frag_mz[0][0])
-            f2 = my_round(query_prec_mz)
-
-            if f1 != f2:
-                start = 0
-            else:
-                start = 1
-                uis_num+=1
-                
-            query_frag_mz = query_frag_mz[start:uis_num]
-            query_frag_mz_values = [query[0] for query in query_frag_mz]
-            transitions = len(query_frag_mz_values)
-            
-            for transition in query_frag_mz_values:
-                if ppm_q3 != 0:
-                    change_q3 = (ppm_q3/1000000.0)*(transition)
-                low = transition - (change_q3/2.0)
-                high = transition + (change_q3/2.0)
-                transitions_q1 = [[(a,b) for (a,b) in peaklist if a>=low and a<=high and (b>(top_n))] for peaklist in background_filt['peaks']] #do transitions here
-                transitions_q1 = [x for x in transitions_q1 if x!= []]
-                transitions_q1 = list(itertools.chain.from_iterable(transitions_q1))
-                transitions_q1.sort(key = lambda x: x[1], reverse = True) # these are descending intensities
-
-                background_filt = background_filt.loc[(background_filt['peaks'].apply(lambda x: any(transition in x for transition in transitions_q1)))]
+        
         uis = -1
         interferences = -1
         transitions=-1
