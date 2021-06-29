@@ -3,7 +3,6 @@ import seaborn as sns
 import matplotlib
 import matplotlib.pyplot as plt
 import statsmodels.formula.api as smf
-from scipy import stats
 import ast
 from collections import Counter
 import rdkit.Chem as Chem
@@ -17,7 +16,7 @@ def uis_plot(ms1 = ["ms1_7", "ms1_25"], ms2 = ["mrm_7_7", "swath_25da_25", "prm_
     for size in sizes:
         uis = []
         if ms1 != []:
-            for file in ms1: #xaxis
+            for file in ms1:
                 name = str(file)+file_suffix
                 query = pd.read_csv(name)                
                 query = query.loc[query['UIS']!=-1]
@@ -75,7 +74,7 @@ def library_size_saturation(sizes = [1000,2000,3000,4000,5000,6000,7000,8000,900
         for size in sizes:
             name = str(file)+"_"+str(size)+files_suffix
             df = pd.read_csv(name, header=0) 
-            df = df.loc[df['UIS']!=-1].reset_index(drop=True)
+            df = df.loc[df['UIS']!='-1'].reset_index(drop=True)
             
             splitting = df.loc[df['cas_num']==str('cas_num')] #each sample/100 has a header
             df = df.loc[(df['UIS']=='1') | (df['UIS']=='0') | (df['UIS']=='UIS')]
@@ -128,11 +127,9 @@ def library_size_saturation(sizes = [1000,2000,3000,4000,5000,6000,7000,8000,900
         plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05),
               fancybox=True, shadow=True, ncol=5)
         
-        plot.set(ylim=(0, 100))
         plot.set_xlabel('MS Method', fontsize=12)
         plot.set_ylabel('Percentage of Unique Compounds', fontsize=12)
         plot.set_ylim(0,100)
-        plot.set_title(file, fontsize = 16)
         print(UIS)
         UIS_all.append(UIS)
     plt.show()
@@ -154,6 +151,8 @@ def ce_opt_plot(file_name = "ce_opt_615_qtof_25da.csv"):
     ce2 = pd.read_csv(file_name)
     ce2 = ce2.loc[ce2['NumSpectra']!=0] #comp with no interferences
     ce2['AllCE'] = ce2['AllCE'].apply(lambda x: ast.literal_eval(x))
+    ce2['unique_ce_all'] = ce2['AllCE'].apply(lambda x: Counter(list(itertools.chain.from_iterable(x))))
+    ce2['unique_POCE'] = ce2['unique_ce_all'].apply(lambda x: len(x)) #number of unique POCE per comp
 
     #find POCE and Opt CE
     all_settings = []
@@ -239,7 +238,7 @@ def transition_num(sizes = [1,2,3,4,5,6,7,8], files = ["mrm_7_7", "swath_25da_25
     UIS_all = []
     for file in files:
         UIS = []
-        for size in sizes: #sizes=columns
+        for size in sizes:
             name = str(file)+"_UIS"+str(size)+file_suffix
             query = pd.read_csv(name)
             query = query.loc[query['UIS']!=-1]
@@ -276,12 +275,9 @@ def transition_num(sizes = [1,2,3,4,5,6,7,8], files = ["mrm_7_7", "swath_25da_25
 def spec_details(top_n=0.1):
     allcomp, spectra = read(compounds = 'comp_df17.pkl', spectra = 'spec_df17.pkl')
     compounds_filt, spectra_filt = filter_comp(compounds_filt=allcomp, spectra=spectra)
-    adduct = ['[M+H]+', '[M+Na]+']
-    spectra_filt_add = spectra_filt.loc[spectra_filt['prec_type'].isin(adduct)]
-    compounds_filt_add = compounds_filt.loc[compounds_filt['mol_id'].isin(spectra_filt_add.mol_id)]
 
     sns.set_palette("rocket", n_colors = 3)
-    sns.distplot(spectra_filt_add['prec_mz'], kde=False)
+    sns.distplot(spectra_filt['prec_mz'], kde=False)
     plt.show()
 
     spectra_filt['peaks'] = [[(a,b) for (a,b) in peaklist if (b>top_n)] for peaklist in spectra_filt['peaks']]
