@@ -15,6 +15,7 @@ hcd_comp, hcd_spec = optimal_ce_filter(hcd_comp, hcd_spec, '[M+H]+')
 
 both = set(hcd_comp['mol_id']).intersection(set(qtof_comp['mol_id']))
 compounds_filt = compounds_filt.loc[compounds_filt['mol_id'].isin(both)]
+compounds_filt = compounds_filt.reset_index(drop=True)
 qtof = qtof_spec.loc[qtof_spec['mol_id'].isin(compounds_filt.mol_id)]
 
 optimal_ce = collision_energy_optimizer(compounds_filt = compounds_filt, spectra_filt = qtof)
