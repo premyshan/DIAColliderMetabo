@@ -3,7 +3,7 @@
 from srmcollidermetabo import *
 
 allcomp, spectra = read(compounds = 'comp_df17.pkl', spectra = 'spec_df17.pkl')
-spectra['col_energy'].replace(regex=True,inplace=True,to_replace='[^0-9.]',value=r'') #IT/FT has % which our original script removes 
+spectra['col_energy'].replace(regex=True,inplace=True,to_replace='[^0-9.]',value=r'') #IT/FT has % which our original script removes, other instruments will be filtered out in filter_comp 
 compounds_filt, spectra_filt = filter_comp(compounds_filt=allcomp, spectra=spectra, inst_type = ['IT-FT/ion trap with FTMS', 'HCD'])
 
 adduct = ['[M+H]+', '[M+Na]+']
