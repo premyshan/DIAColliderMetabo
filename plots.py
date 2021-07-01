@@ -347,11 +347,12 @@ def profile_specific(mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, add
         comp_x = allcomp.loc[allcomp.mol_id==comp.mol_id]
         spec_x = spectra.loc[spectra.spectrum_id==comp.spectrum_id]
         comp_name = comp_x.name.item()
+        comp_mass = comp_x.exact_mass.item()
         comp_smiles = comp_x.smiles.item()
         spec_prec_mz = spec_x.prec_mz.item()
         spec_adduct = spec_x.prec_type.item()
         spec_col = spec_x.col_energy.item()
-        print(comp_name, spec_prec_mz, spec_adduct, spec_col)
+        print(comp_name, comp_mass, spec_prec_mz, spec_adduct, spec_col)
         get_mol_im(comp_smiles, comp.mol_id)
     print(interferences)
     print(uis)
