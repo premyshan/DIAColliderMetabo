@@ -333,6 +333,14 @@ def profile_specific(mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, add
     query, background, uis, interferences, transitions = choose_background_and_query(mol_id = mol_id, change = change, ppm = ppm, change_q3 = change_q3, ppm_q3 = ppm_q3,
                                                                                      col_energy = col_energy,adduct = adduct, q3 = q3, top_n = top_n, spectra_filt = spectra_filt, uis_num=uis_num)
     print(query)
+    query_x = allcomp.loc[allcomp.mol_id==query.mol_id.item()]
+    query_name = query_x.name.item()
+    query_mass = query_x.exact_mass.item()
+    queryspec_x = spectra.loc[spectra.spectrum_id==query.spectrum_id.item()]
+    queryspec_prec_mz = queryspec_x.prec_mz.item()
+    queryspec_adduct = queryspec_x.prec_type.item()
+    print(query_name, query_mass, queryspec_prec_mz, queryspec_adduct)
+    
     for i,comp in background.iterrows():
         print(comp)
         comp_x = allcomp.loc[allcomp.mol_id==comp.mol_id]
