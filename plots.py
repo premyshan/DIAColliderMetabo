@@ -339,7 +339,8 @@ def profile_specific(mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, add
     queryspec_x = spectra.loc[spectra.spectrum_id==query.spectrum_id.item()]
     queryspec_prec_mz = queryspec_x.prec_mz.item()
     queryspec_adduct = queryspec_x.prec_type.item()
-    print(query_name, query_mass, queryspec_prec_mz, queryspec_adduct)
+    queryspec_col = queryspec_x.col_energy.item()
+    print(query_name, query_mass, queryspec_prec_mz, queryspec_adduct, queryspec_col)
     
     for i,comp in background.iterrows():
         print(comp)
@@ -349,7 +350,8 @@ def profile_specific(mol_id, change = 0, ppm = 0, change_q3 = 0, ppm_q3 = 0, add
         comp_smiles = comp_x.smiles.item()
         spec_prec_mz = spec_x.prec_mz.item()
         spec_adduct = spec_x.prec_type.item()
-        print(comp_name, spec_prec_mz, spec_adduct)
+        spec_col = spec_x.col_energy.item()
+        print(comp_name, spec_prec_mz, spec_adduct, spec_col)
         get_mol_im(comp_smiles, comp.mol_id)
     print(interferences)
     print(uis)
