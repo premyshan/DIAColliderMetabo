@@ -139,13 +139,19 @@ def ce_dist():
     allcomp, spectra = read(compounds = 'comp_df17.pkl', spectra = 'spec_df17.pkl')
     compounds_filt, spectra_filt = filter_comp(compounds_filt=allcomp, spectra=spectra, col_energy=0)
     sns.set_palette("rocket")
-    pd.to_numeric(spectra_filt['col_energy']).hist(by=spectra_filt['inst_type'])
     hcd = spectra_filt.loc[spectra_filt['inst_type']=='HCD']
     print(len(set(hcd['col_energy'])))
     qtof = spectra_filt.loc[spectra_filt['inst_type']=='Q-TOF']
     print(len(set(qtof['col_energy'])))
+    
+    plt.subplot(1,2,1)
+    plt.hist(hcd.col_energy, bins=range(0,360,30),edgecolor='black') #one extra step than expected
+    plt.xticks(range(0,360,60))
+    plt.subplot(1,2,2)
+    plt.hist(qtof.col_energy,bins=range(0,65,5),edgecolor='black')
+    plt.xticks(range(0,65,10))
     plt.show()
-
+    
 def ce_opt_plot(file_name = "ce_opt_615_qtof_25da.csv"):
     sns.set_palette("rocket")
     ce2 = pd.read_csv(file_name)
@@ -205,7 +211,7 @@ def spectra_display(queryid, comparedid):
     query = list(query_spectra['peaks'])[0]
     query2 = pd.DataFrame(query, columns = ['m/z', 'int'])
     compare = list(compared_spectra['peaks'])[0]
-    compare2 = pd.DataFrame(compare, columns = ['m/z', 'int'], )
+    compare2 = pd.DataFrame(compare, columns = ['m/z', 'int'])
 
     fig = plt.figure(figsize=(10,10),dpi=100)
     gs = matplotlib.gridspec.GridSpec(3,1,height_ratios=[1,2,2], hspace=0)
@@ -277,7 +283,7 @@ def spec_details(top_n=0.1):
     compounds_filt, spectra_filt = filter_comp(compounds_filt=allcomp, spectra=spectra)
 
     sns.set_palette("rocket", n_colors = 3)
-    sns.distplot(spectra_filt['prec_mz'], kde=False)
+    sns.histplot(spectra_filt['prec_mz'], kde=False, bins=range(0,1640,10))
     plt.show()
 
     spectra_filt['peaks'] = [[(a,b) for (a,b) in peaklist if (b>top_n)] for peaklist in spectra_filt['peaks']]
@@ -306,7 +312,7 @@ def spec_details(top_n=0.1):
     df = pd.DataFrame(data=d)
     print(df)
     sns.set_palette("rocket", n_colors = 3)
-    labels = df.index
+    labels = ['<=5','6<=x<=9','>=10']
     
     percentages = [low, medium, morethan]
     x = plt.pie(percentages, labels=labels,  
