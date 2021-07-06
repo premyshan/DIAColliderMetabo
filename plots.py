@@ -232,8 +232,6 @@ def spectra_display(queryid, comparedid):
     ax_bottom.set_ylim((120,0))
     ax_bottom.set_ylabel('Relative Abundance')
     ax_bottom.set_yticks([100,50,0])
-    yticks_bottom = ax_bottom.yaxis.get_major_ticks()
-    yticks_bottom[0].label1.set_visible(False)
 
     plt.show()
 
