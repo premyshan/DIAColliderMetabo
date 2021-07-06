@@ -13,4 +13,4 @@ transnum17.py - saturation analyses based on transition number used for UIS usin
 CE17.py - finding pairwsie-optimal collision energies (POCE) per compound using NIST 17 (Q-TOF instruments)\
 CE17_hcd.py and CE17_qtof.py - comparing POCE groups for overlapping compounds measured using Q-TOF and HCD instruments\
 mainrun17_hcd & mainrun17_it.py - comparing profiling for overlapping compounds from instruments using HCD vs CID (IT-FT)\
-plots.py - plotting script for manuscript\
+plots.py - plotting script for manuscript
